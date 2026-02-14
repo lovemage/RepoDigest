@@ -19,25 +19,25 @@
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
-      "@repodigest/core": [
+      "@oceanads/core": [
         "packages/core/src/index.ts"
       ],
-      "@repodigest/provider-github": [
+      "@oceanads/provider-github": [
         "packages/provider-github/src/index.ts"
       ],
-      "@repodigest/provider-git": [
+      "@oceanads/provider-git": [
         "packages/provider-git/src/index.ts"
       ],
-      "@repodigest/renderer-internal": [
+      "@oceanads/renderer-internal": [
         "packages/renderer-internal/src/index.ts"
       ],
-      "@repodigest/renderer-x": [
+      "@oceanads/renderer-x": [
         "packages/renderer-x/src/index.ts"
       ],
-      "@repodigest/renderer-threads": [
+      "@oceanads/renderer-threads": [
         "packages/renderer-threads/src/index.ts"
       ],
-      "@repodigest/cli": [
+      "@oceanads/cli": [
         "packages/cli/src/index.ts"
       ]
     },

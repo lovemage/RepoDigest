@@ -4,7 +4,7 @@
 
 Provider goal: collect source activity and normalize to `Event[]`.
 
-Type shape (from `@repodigest/core`):
+Type shape (from `@oceanads/core`):
 
 ```ts
 type Event = {

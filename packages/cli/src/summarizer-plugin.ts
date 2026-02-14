@@ -1,6 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { WorkItem } from "@repodigest/core";
+import type { WorkItem } from "@oceanads/core";
 
 export interface SummarizerPlugin {
   summarizeWorkItem: (item: WorkItem) => Promise<string[] | null | undefined> | string[] | null | undefined;

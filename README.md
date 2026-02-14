@@ -26,7 +26,7 @@ It can render:
 ```bash
 npm install
 npm run build
-node packages/cli/dist/index.js init --quick --project
+npx repodigest init --quick --project
 ```
 
 That one `init --quick` command does:
@@ -37,13 +37,13 @@ That one `init --quick` command does:
 
 Optional (skip selection prompt):
 ```bash
-node packages/cli/dist/index.js init --quick --project --repo owner/repo
+npx repodigest init --quick --project --repo owner/repo
 ```
 
 If an existing install is detected, CLI will let you choose reinstall interactively.
 For non-interactive environments, use:
 ```bash
-node packages/cli/dist/index.js init --quick --project --reinstall
+npx repodigest init --quick --project --reinstall
 ```
 
 ## No Manual Token Copy
@@ -51,7 +51,7 @@ node packages/cli/dist/index.js init --quick --project --reinstall
 Browser auth only.
 
 ```bash
-node packages/cli/dist/index.js auth login
+npx repodigest auth login
 ```
 
 CLI shows the device code first, then waits for `Enter` before opening your browser.
@@ -59,20 +59,20 @@ CLI shows the device code first, then waits for `Enter` before opening your brow
 If `gh` is not available on your machine, use OAuth app fallback:
 
 ```bash
-node packages/cli/dist/index.js auth login --client-id <GITHUB_OAUTH_CLIENT_ID>
+npx repodigest auth login --client-id <GITHUB_OAUTH_CLIENT_ID>
 ```
 
 ## Daily Usage
 
 ```bash
 # generate today report
-node packages/cli/dist/index.js today
+npx repodigest today
 
 # preview only (no file write)
-node packages/cli/dist/index.js today --dry-run
+npx repodigest today --dry-run
 
 # weekly window
-node packages/cli/dist/index.js range --since monday --until today
+npx repodigest range --since monday --until today
 ```
 
 ## Output Files
@@ -85,13 +85,38 @@ node packages/cli/dist/index.js range --since monday --until today
 
 ```bash
 # update config
-node packages/cli/dist/index.js update --add-repo owner/new-repo --lang zh-TW
+npx repodigest update --add-repo owner/new-repo --lang zh-TW
 
 # remove RepoDigest files
-node packages/cli/dist/index.js remove --yes
+npx repodigest remove --yes
 
 # verify auth + config
-node packages/cli/dist/index.js validate
+npx repodigest validate
+```
+
+## Publish To npm (for `npx repodigest`)
+
+1. Create npm account: https://www.npmjs.com/signup
+2. Verify email and enable 2FA in npm account settings.
+3. Login locally:
+```bash
+npm login
+```
+4. Publish workspace packages in order:
+```bash
+npm run build
+npm publish --workspace packages/core --access public
+npm publish --workspace packages/provider-github --access public
+npm publish --workspace packages/provider-git --access public
+npm publish --workspace packages/renderer-internal --access public
+npm publish --workspace packages/renderer-threads --access public
+npm publish --workspace packages/renderer-x --access public
+npm publish --workspace packages/cli --access public
+```
+Note: current internal dependencies use `@oceanads/*`. You must own that npm scope (or rename scopes before publishing).
+5. Verify:
+```bash
+npx -y repodigest --help
 ```
 
 ## Docs
@@ -99,6 +124,7 @@ node packages/cli/dist/index.js validate
 - Config: `docs/CONFIG.md`
 - Plugins: `docs/PLUGINS.md`
 - KPI: `docs/KPI.md`
+- npm publish guide (zh-TW): `docs/NPM_PUBLISH.zh-TW.md`
 
 ## License
 

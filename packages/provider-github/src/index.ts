@@ -1,5 +1,5 @@
 import { Octokit } from "@octokit/rest";
-import type { Event } from "@repodigest/core";
+import type { Event } from "@oceanads/core";
 
 export interface GithubLabel {
   name: string;

@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
-import type { Event } from "@repodigest/core";
+import type { Event } from "@oceanads/core";
 
 const FIELD_SEPARATOR = "\u001f";
 const RECORD_SEPARATOR = "\u001e";

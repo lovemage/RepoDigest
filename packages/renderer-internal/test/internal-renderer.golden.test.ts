@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import type { Digest, Event, WorkItem } from "@repodigest/core";
+import type { Digest, Event, WorkItem } from "@oceanads/core";
 import { renderInternalDigest } from "../src/index.js";
 
 function createEvent(id: string, type: Event["type"]): Event {

@@ -1,4 +1,4 @@
-import type { Digest, WorkItem } from "@repodigest/core";
+import type { Digest, WorkItem } from "@oceanads/core";
 
 function formatItem(item: WorkItem, withLinks: boolean): string {
   const dueSuffix = item.due ? ` (due ${item.due})` : "";

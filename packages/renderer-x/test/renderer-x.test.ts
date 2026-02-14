@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Digest, Event, WorkItem } from "@repodigest/core";
+import type { Digest, Event, WorkItem } from "@oceanads/core";
 import { renderXDigest, splitThread } from "../src/index.js";
 
 function event(id: string, type: Event["type"]): Event {

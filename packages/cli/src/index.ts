@@ -3,11 +3,11 @@ import { checkbox as promptCheckbox, select as promptSelect } from "@inquirer/pr
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runPipeline, type Event, type WorkItem } from "@repodigest/core";
-import { GithubProviderClient, type GithubFetchOptions } from "@repodigest/provider-github";
-import { renderInternalDigest } from "@repodigest/renderer-internal";
-import { renderThreadsDigest } from "@repodigest/renderer-threads";
-import { renderXDigest } from "@repodigest/renderer-x";
+import { runPipeline, type Event, type WorkItem } from "@oceanads/core";
+import { GithubProviderClient, type GithubFetchOptions } from "@oceanads/provider-github";
+import { renderInternalDigest } from "@oceanads/renderer-internal";
+import { renderThreadsDigest } from "@oceanads/renderer-threads";
+import { renderXDigest } from "@oceanads/renderer-x";
 import { runAuthLogin, runAuthLogout, type GithubDeviceAuthClientLike } from "./auth.js";
 import { formatConfigError, loadConfig, serializeConfig, type RepoDigestConfig } from "./config.js";
 import {

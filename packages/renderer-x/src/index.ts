@@ -1,4 +1,4 @@
-import type { Digest, WorkItem } from "@repodigest/core";
+import type { Digest, WorkItem } from "@oceanads/core";
 
 export type PublicTone = "calm" | "playful" | "hacker" | "formal";
 export type PublicLang = "en" | "zh-TW" | "both";

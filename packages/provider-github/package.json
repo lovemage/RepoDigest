@@ -1,5 +1,5 @@
 {
-  "name": "@repodigest/provider-github",
+  "name": "@oceanads/provider-github",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -20,6 +20,6 @@
   },
   "dependencies": {
     "@octokit/rest": "^22.0.0",
-    "@repodigest/core": "0.1.0"
+    "@oceanads/core": "0.1.0"
   }
 }

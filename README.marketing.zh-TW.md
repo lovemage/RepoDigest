@@ -1,7 +1,7 @@
 # RepoDigest（白話版）
 
-每天一鍵，把你在 GitHub 做的事變成可貼到 standup 的摘要。
-沒有 Issue / PR 也可以，現在會抓 `commit` 事件。
+每天一鍵，把你在 GitHub 做的事變成 standup 摘要。  
+就算你沒有 Issue / PR，只用 Commit 也能用。
 
 ## 語言版本
 
@@ -14,46 +14,25 @@
 ```bash
 npm install
 npm run build
-node packages/cli/dist/index.js init --quick --project
+npx repodigest init --quick --project
 ```
 
-這個指令會自動做完：
-1. 建好設定檔
-2. 開瀏覽器完成 GitHub 授權
-3. 在 CLI 直接勾選你要追蹤的 repo（可不先輸入 repo 名稱）
-4. 幫你檢查設定可用
-
-如果偵測到你之前裝過，CLI 會直接問你要不要「重新安裝並清掉舊的產出檔」。
-非互動環境可用：
-
-```bash
-node packages/cli/dist/index.js init --quick --project --reinstall
-```
+這個流程會自動完成：
+1. 建立設定檔
+2. GitHub 瀏覽器授權
+3. 在 CLI 勾選追蹤 repo
+4. 驗證設定可用
 
 ## 每天使用
 
 ```bash
-node packages/cli/dist/index.js today
+npx repodigest today
 ```
 
-你會拿到：
-- `Due Today`
-- `Done`
-- `In Progress`
-- `Blocked`
-- `Next`
-
-## 常用指令
+## 其他常用
 
 ```bash
-# 檢查設定
-node packages/cli/dist/index.js validate
-
-# 加 repo
-node packages/cli/dist/index.js update --add-repo owner/new-repo
-
-# 移除安裝檔
-node packages/cli/dist/index.js remove --yes
+npx repodigest validate
+npx repodigest update --add-repo owner/new-repo
+npx repodigest remove --yes
 ```
-
-授權時，CLI 會先顯示要輸入到瀏覽器的驗證碼，按 Enter 才會開瀏覽器。

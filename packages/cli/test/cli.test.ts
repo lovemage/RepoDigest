@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/index.js";
 import type { GithubDeviceAuthClientLike } from "../src/auth.js";
 import type { PromptAdapter } from "../src/init.js";
-import type { Event } from "@repodigest/core";
+import type { Event } from "@oceanads/core";
 
 const tempDirs: string[] = [];
 let originalGithubToken: string | undefined;
