@@ -1,0 +1,28 @@
+timezone: UTC
+scope:
+  repos:
+    - owner/repo
+
+providers:
+  github:
+    tokenEnv: GITHUB_TOKEN
+    query:
+      assignee: "@me"
+      labelsAny:
+        - today
+        - standup
+
+output:
+  mode: internal
+  target: internal
+  lang: en
+  tone: calm
+  length: short
+  include:
+    stack: false
+    links: true
+    metrics: true
+  thread:
+    enabled: false
+    numbering: "1/1"
+

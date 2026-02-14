@@ -1,0 +1,12 @@
+- name: bug
+  color: d73a4a
+  description: Confirmed defect
+
+- name: enhancement
+  color: a2eeef
+  description: New feature or improvement
+
+- name: good first issue
+  color: 7057ff
+  description: Good starter task for first-time contributors
+

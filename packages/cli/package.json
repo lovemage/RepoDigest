@@ -1,0 +1,28 @@
+{
+  "name": "@repodigest/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "repodigest": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.5.2",
+    "@repodigest/core": "0.1.0",
+    "@repodigest/provider-github": "0.1.0",
+    "@repodigest/renderer-internal": "0.1.0",
+    "@repodigest/renderer-threads": "0.1.0",
+    "@repodigest/renderer-x": "0.1.0",
+    "yaml": "^2.7.1",
+    "zod": "^3.24.1"
+  }
+}

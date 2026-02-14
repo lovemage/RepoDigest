@@ -1,0 +1,67 @@
+name: Bug Report
+description: Report a reproducible defect in RepoDigest.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please provide a minimal, reproducible case.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: RepoDigest version or commit SHA
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: node_version
+    attributes:
+      label: Node.js Version
+      placeholder: 22.x
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: Exact command you ran
+      placeholder: npx repodigest today --dry-run
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+    validations:
+      required: true
+  - type: textarea
+    id: repro_steps
+    attributes:
+      label: Steps to Reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Config Snippet (.repodigest.yml)
+      description: Remove sensitive info before posting
+      render: yaml
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Error Output
+      render: shell
+

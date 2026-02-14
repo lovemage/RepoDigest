@@ -1,0 +1,28 @@
+[
+  {
+    "id": 101,
+    "number": 12,
+    "title": "Fix flaky digest ordering",
+    "body": "Ensure deterministic output ordering.",
+    "state": "closed",
+    "html_url": "https://github.com/acme/repo/issues/12",
+    "labels": ["bug", "due/today"],
+    "created_at": "2026-02-10T08:00:00Z",
+    "updated_at": "2026-02-12T09:00:00Z",
+    "closed_at": "2026-02-13T10:30:00Z",
+    "user": { "login": "alice" },
+    "milestone": { "title": "Sprint-7", "due_on": null }
+  },
+  {
+    "id": 102,
+    "number": 13,
+    "title": "Investigate reporting gap",
+    "state": "open",
+    "html_url": "https://github.com/acme/repo/issues/13",
+    "labels": ["investigate"],
+    "created_at": "2026-02-11T08:00:00Z",
+    "updated_at": "2026-02-11T12:00:00Z",
+    "user": { "login": "bob" }
+  }
+]
+

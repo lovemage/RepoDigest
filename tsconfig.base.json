@@ -1,0 +1,48 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ES2024"
+    ],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "useDefineForClassFields": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@repodigest/core": [
+        "packages/core/src/index.ts"
+      ],
+      "@repodigest/provider-github": [
+        "packages/provider-github/src/index.ts"
+      ],
+      "@repodigest/provider-git": [
+        "packages/provider-git/src/index.ts"
+      ],
+      "@repodigest/renderer-internal": [
+        "packages/renderer-internal/src/index.ts"
+      ],
+      "@repodigest/renderer-x": [
+        "packages/renderer-x/src/index.ts"
+      ],
+      "@repodigest/renderer-threads": [
+        "packages/renderer-threads/src/index.ts"
+      ],
+      "@repodigest/cli": [
+        "packages/cli/src/index.ts"
+      ]
+    },
+    "types": [
+      "node"
+    ]
+  }
+}

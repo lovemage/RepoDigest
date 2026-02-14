@@ -1,0 +1,24 @@
+{
+  "reviewers": [
+    {
+      "name": "alice",
+      "decisions": [
+        { "pass": true, "note": "Clear due date evidence." },
+        { "pass": true, "note": "Merged PR was obvious." },
+        { "pass": true, "note": "Open PR in progress made sense." },
+        { "pass": false, "note": "Blocked reason needed clearer wording." },
+        { "pass": true, "note": "Next item was easy to explain." }
+      ]
+    },
+    {
+      "name": "bob",
+      "decisions": [
+        { "pass": true, "note": "" },
+        { "pass": true, "note": "" },
+        { "pass": true, "note": "" },
+        { "pass": true, "note": "" },
+        { "pass": false, "note": "Expected explicit label evidence." }
+      ]
+    }
+  ]
+}
