@@ -19,7 +19,9 @@
     "kpi:coverage": "npm run test:coverage && node scripts/kpi/critical-path-coverage.mjs",
     "kpi:github": "node scripts/kpi/github-metrics.mjs",
     "kpi:explainability": "node scripts/kpi/explainability-session.mjs",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "release:publish": "node scripts/release/publish-workspaces.mjs",
+    "release:publish:dry": "node scripts/release/publish-workspaces.mjs --dry-run --skip-checks"
   },
   "devDependencies": {
     "@types/node": "^22.13.4",

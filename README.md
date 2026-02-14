@@ -113,6 +113,10 @@ npm publish --workspace packages/renderer-threads --access public
 npm publish --workspace packages/renderer-x --access public
 npm publish --workspace packages/cli --access public
 ```
+Or one command:
+```bash
+npm run release:publish
+```
 Note: current internal dependencies use `@oceanads/*`. You must own that npm scope (or rename scopes before publishing).
 5. Verify:
 ```bash

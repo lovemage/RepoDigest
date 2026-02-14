@@ -1,11 +1,11 @@
 {
   "name": "repodigest",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "repodigest": "./dist/index.js"
+    "repodigest": "./dist/bin.js"
   },
   "publishConfig": {
     "access": "public"

@@ -2,7 +2,6 @@
 import { checkbox as promptCheckbox, select as promptSelect } from "@inquirer/prompts";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { runPipeline, type Event, type WorkItem } from "@oceanads/core";
 import { GithubProviderClient, type GithubFetchOptions } from "@oceanads/provider-github";
 import { renderInternalDigest } from "@oceanads/renderer-internal";
@@ -1658,14 +1657,3 @@ export async function runCli(
   }
 }
 
-const isMain = process.argv[1] === fileURLToPath(import.meta.url);
-if (isMain) {
-  runCli(process.argv.slice(2))
-    .then((code) => {
-      process.exitCode = code;
-    })
-    .catch((error: unknown) => {
-      console.error(error);
-      process.exitCode = 1;
-    });
-}
