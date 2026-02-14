@@ -1,185 +1,71 @@
-﻿# RepoDigest
+# RepoDigest（繁中技術版）
 
-敺?GitHub ?脣?摨急暑???湔?冽 standup ??Markdown ????
-## 隞晶
+將 GitHub 活動自動整理成 standup 摘要。
 
-RepoDigest ??????GitHub ??Issue / PR 瘣餃?嚗?憿極雿???銝西撓?箸?霈???交?閬?
-?桀????函帘摰? CLI 瘚?嚗?- ????獢身摰?- 撽?閮剖???Token
-- ?Ｙ? `today` ??`range` ??
+## 版本導覽
 
-## ?
+- 英文版（首頁）: `README.md`
+- 繁中技術版（本頁）: `README.zh-TW.md`
+- 繁中白話版: `README.marketing.zh-TW.md`
 
-- 雿輻 `repodigest init` 鈭?撘?憪?
-- 隞?Zod 撽?閮剖?瑼?`.repodigest.yml`嚗?- GitHub provider嚗ssue / PR / Milestone 甇????
-- Internal renderer嚗帘摰撓??+ golden tests嚗?- X renderer嚗摰?280 摮?銝莎?
-- Threads renderer嚗uild-in-public 憸冽嚗?- ?????閬?
-  - `today`嚗?閮剜?餈?24 撠?嚗?  - `range`嚗閮?`--since/--until`嚗?
-## ?啣??瘙?
-- Node.js `>= 22`
-- npm `>= 10`
-- ?瑕? repo 霈???? GitHub Token
+## 功能摘要
 
-## 摰?嚗???蝣潘?
+- 從 GitHub 收集 Issue / PR 活動
+- 自動分類：`Due Today`、`Done`、`In Progress`、`Blocked`、`Next`
+- 多輸出目標：`internal`、`x`、`threads`
+- CLI 指令：`init`、`validate`、`today`、`range`、`update`、`remove`、`auth`
+
+## 安裝
 
 ```bash
 npm install
 npm run build
 ```
 
-## 敹恍?憪?
-1. ???身摰??舫頛瑼?嚗?```bash
-node packages/cli/dist/index.js init
-```
+## 最快啟用（推薦）
 
-銝銵翰??鋆?init + ?汗?冽?甈?+ validate嚗?
 ```bash
-node packages/cli/dist/index.js init --quick --project --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
+node packages/cli/dist/index.js init --quick --project --repo owner/repo
 ```
 
-銝銵?隞歹?project 摰?嚗?
+這個流程會自動：
+1. 產生 `.repodigest.yml`
+2. 走瀏覽器授權（優先使用 `gh`）
+3. 執行 `validate`
+
+## 授權（僅瀏覽器）
+
 ```bash
-node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
+node packages/cli/dist/index.js auth login
 ```
 
-銝銵?隞歹?摰?瘚??湔韏啁汗?冽?甈?嚗?```bash
-node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
-```
+若你未安裝 `gh`，可改用：
 
-銝銵?隞歹?agentrule ?典?摰?嚗?
-```bash
-node packages/cli/dist/index.js init --agentrule --yes --repo owner/repo
-```
-
-2. 撽?閮剖???Token嚗?```bash
-node packages/cli/dist/index.js validate
-```
-
-?舫嚗汗?函??GitHub嚗Auth device flow嚗?
 ```bash
 node packages/cli/dist/index.js auth login --client-id <GITHUB_OAUTH_CLIENT_ID>
 ```
 
-3. ?Ｙ?隞??嚗?```bash
-node packages/cli/dist/index.js today
-```
+## 驗證與執行
 
-4. ?Ｙ????閬?
 ```bash
+node packages/cli/dist/index.js validate
+node packages/cli/dist/index.js today
 node packages/cli/dist/index.js range --since monday --until today
 ```
 
-5. 敹恍?啗身摰?靘??啣? repo嚗?
+## 其他常用指令
+
 ```bash
 node packages/cli/dist/index.js update --add-repo owner/new-repo --lang zh-TW
-```
-
-6. 蝘駁撌脣?鋆?獢?project ?格?嚗?
-```bash
 node packages/cli/dist/index.js remove --yes
 ```
 
-## 雿輻?孵?
+## 文件
 
-### `today`
+- 設定：`docs/CONFIG.md`
+- Plugin：`docs/PLUGINS.md`
+- KPI：`docs/KPI.md`
 
-?Ｙ?餈?瘣餃???嚗?閮剜?餈?24 撠?嚗?
-```bash
-node packages/cli/dist/index.js today
-node packages/cli/dist/index.js today --dry-run
-node packages/cli/dist/index.js today --preview --target x --tone playful --lang zh-TW
-node packages/cli/dist/index.js today --since yesterday --until now
-```
+## 授權條款
 
-### `range`
-
-?Ｙ?????蝭?????
-```bash
-node packages/cli/dist/index.js range --since 2026-02-10 --until 2026-02-14
-node packages/cli/dist/index.js range --since monday --until now --preview --target threads
-node packages/cli/dist/index.js range --since monday --until today --dry-run
-```
-
-### `update`
-
-銝?瑼?嚗?交??`.repodigest.yml`??
-```bash
-node packages/cli/dist/index.js update --add-repo owner/repo-b --lang zh-TW
-node packages/cli/dist/index.js update --remove-repo owner/repo-old --target x --tone playful
-node packages/cli/dist/index.js update --agentrule --add-repo owner/global-repo
-```
-
-### `remove`
-
-蝘駁 RepoDigest 蝞∠???獢??閬?`--yes` 摰??嚗?
-```bash
-node packages/cli/dist/index.js remove --yes
-node packages/cli/dist/index.js remove --agentrule --yes --keep-output
-```
-
-### `auth`
-
-雿輻?汗?典???GitHub OAuth 鋆蔭瘚??餃嚗?箝?
-```bash
-node packages/cli/dist/index.js auth login --client-id <GITHUB_OAUTH_CLIENT_ID>
-node packages/cli/dist/index.js auth logout
-```
-
-鋆?嚗?- ?舐 `--token-env <KEY>` ??閬神?交?蝘駁?憓??詨?蝔晞?- ?舐 `--project` ??`--agentrule` ???格?頝臬???- 銋隞亙?閮剖? `REPODIGEST_GITHUB_CLIENT_ID`嚗停銝?瘥活撣?`--client-id`??- ?臬 `init` ?湔雿輻 `--token-source browser`嚗?鋆?撠勗???甈?
-`--since/--until` ?舀敹急?潘?
-- `now`
-- `today`
-- `yesterday`
-- `monday`
-
-## 頛詨瑼?
-
-- Daily嚗?  - `repodigest/daily/YYYY-MM-DD.md`
-  - `repodigest/latest.md`
-- Range嚗?  - `repodigest/range/YYYY-MM-DD_to_YYYY-MM-DD.md`
-  - `repodigest/latest.md`
-
-## 閮剖?瑼?
-摰閮剖?隢? `docs/CONFIG.md`?? 
-Plugin ?????
-- `docs/PLUGINS.md`
-- `docs/LLM_PLUGIN.md`
-- `docs/KPI.md`
-
-?典?摰?頝臬?嚗?- ?身嚗~/.agentrule/repodigest`
-- ?舐?啣?霈閬神嚗AGENTRULE_HOME`
-
-## ??圾
-
-撣貉?擐活????嚗?
-- `Missing GitHub token`
-  - ?函憓??豢? `.env` 閮剖? `.repodigest.yml` ??`providers.github.tokenEnv` ????key??- `scope.repos must include at least one owner/repo`
-  - ??`.repodigest.yml` ?喳??銝??repo嚗?憒?`scope.repos: [owner/repo]`
-- `Invalid date value`嚗range`嚗?  - 雿輻 ISO ??嚗? `2026-02-14T00:00:00Z`嚗?敹急?潘?`monday`?today`?yesterday`?now`嚗?
-## ?
-
-?祆?瑼Ｘ嚗?
-```bash
-npm run typecheck
-npm test
-npm run build
-```
-
-?詨? workspace 憟辣嚗?- `packages/core`
-- `packages/provider-github`
-- `packages/renderer-internal`
-- `packages/cli`
-
-## 頝舐???
-- X ??Threads ??renderer ???芸?
-- ?游? provider嚗?憒?local git嚗?- ?舫??LLM summarizer plugin
-
-## 鞎Ｙ
-
-甇∟?鞎Ｙ??
-隢???`CONTRIBUTING.md`嚗?- ?瘚?
-- triage SLA
-- release note / changelog ?輻?
-
-## ??
-
-MIT嚗?閬?`LICENSE`??
+MIT，請見 `LICENSE`。

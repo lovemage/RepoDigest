@@ -1,185 +1,89 @@
 # RepoDigest
 
-Generate standup-ready markdown digests from GitHub repository activity.
+Turn GitHub activity into a standup report in minutes.
 
-## What It Does
+`RepoDigest` auto-summarizes your Issues/PRs into:
+- `Due Today`
+- `Done`
+- `In Progress`
+- `Blocked`
+- `Next`
 
-RepoDigest collects recent GitHub issue/PR activity, classifies status (`Done`, `In Progress`, `Blocked`, `Next`, `Due Today`), and renders output for:
-- internal markdown standups
-- X threads
-- Threads posts
+It can render:
+- internal markdown
+- X thread preview
+- Threads preview
 
-## System Dependencies
+## Language Versions
 
-Install these first:
-- Git
-- Node.js `>= 22`
-- npm `>= 10` (usually bundled with Node.js)
+- English (this file): `README.md`
+- Traditional Chinese (technical): `README.zh-TW.md`
+- Traditional Chinese (plain language): `README.marketing.zh-TW.md`
 
-Version checks:
-```bash
-git --version
-node --version
-npm --version
-```
+## 3-Minute Setup
 
-## Project Setup (From Source)
-
-1. Clone:
-```bash
-git clone https://github.com/lovemage/RepoDigest.git
-cd RepoDigest
-```
-
-2. Install workspace dependencies:
 ```bash
 npm install
-```
-
-3. Build:
-```bash
 npm run build
+node packages/cli/dist/index.js init --quick --project --repo owner/repo
 ```
 
-4. (Optional but recommended) verify local quality checks:
+That one `init --quick` command does:
+1. create config
+2. run browser auth (via GitHub CLI `gh` if available)
+3. validate setup
+
+## No Manual Token Copy
+
+Browser auth only.
+
 ```bash
-npm run typecheck
-npm test
+node packages/cli/dist/index.js auth login
 ```
 
-## Fastest Install Flow
+If `gh` is not available on your machine, use OAuth app fallback:
 
-One command for init + browser auth + config validation:
-```bash
-node packages/cli/dist/index.js init --quick --project --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
-```
-
-## GitHub Authentication (Browser-Only)
-
-RepoDigest now uses browser OAuth device flow as the only supported authentication path.
-
-Login from CLI:
 ```bash
 node packages/cli/dist/index.js auth login --client-id <GITHUB_OAUTH_CLIENT_ID>
 ```
 
-Or do it directly during init (recommended):
+## Daily Usage
+
 ```bash
-node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
-```
-
-### Verify Authentication Is Working
-
-Run:
-```bash
-node packages/cli/dist/index.js validate
-```
-
-Expected result:
-- `Config is valid.`
-- no missing token error
-
-Then run a real fetch:
-```bash
-node packages/cli/dist/index.js today --dry-run
-```
-
-If token or repo permission is wrong, this command will fail with actionable errors.
-
-## Quick Start
-
-Interactive setup:
-```bash
-node packages/cli/dist/index.js init
-```
-
-Non-interactive project install:
-```bash
-node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
-```
-
-Generate digest:
-```bash
+# generate today report
 node packages/cli/dist/index.js today
+
+# preview only (no file write)
+node packages/cli/dist/index.js today --dry-run
+
+# weekly window
 node packages/cli/dist/index.js range --since monday --until today
 ```
 
-## CLI Commands
-
-`today`:
-```bash
-node packages/cli/dist/index.js today
-node packages/cli/dist/index.js today --dry-run
-node packages/cli/dist/index.js today --preview --target x --tone playful --lang zh-TW
-```
-
-`range`:
-```bash
-node packages/cli/dist/index.js range --since 2026-02-10 --until 2026-02-14
-node packages/cli/dist/index.js range --since monday --until now --preview --target threads
-```
-
-`update`:
-```bash
-node packages/cli/dist/index.js update --add-repo owner/repo-b --lang zh-TW
-node packages/cli/dist/index.js update --remove-repo owner/repo-old --target x --tone playful
-```
-
-`remove`:
-```bash
-node packages/cli/dist/index.js remove --yes
-node packages/cli/dist/index.js remove --agentrule --yes --keep-output
-```
-
-`auth`:
-```bash
-node packages/cli/dist/index.js auth login --client-id <GITHUB_OAUTH_CLIENT_ID>
-node packages/cli/dist/index.js auth logout
-```
-
-## Date Shortcuts
-
-Supported for `--since` / `--until`:
-- `now`
-- `today`
-- `yesterday`
-- `monday`
-
 ## Output Files
 
-Daily output:
+- `repodigest/latest.md`
 - `repodigest/daily/YYYY-MM-DD.md`
-- `repodigest/latest.md`
-
-Range output:
 - `repodigest/range/YYYY-MM-DD_to_YYYY-MM-DD.md`
-- `repodigest/latest.md`
 
-## Documentation
+## Useful Commands
 
-- `docs/CONFIG.md`
-- `docs/PLUGINS.md`
-- `docs/LLM_PLUGIN.md`
-- `docs/KPI.md`
-- `README.zh-TW.md`
-- `README.marketing.zh-TW.md`
+```bash
+# update config
+node packages/cli/dist/index.js update --add-repo owner/new-repo --lang zh-TW
 
-## Troubleshooting
+# remove RepoDigest files
+node packages/cli/dist/index.js remove --yes
 
-`Missing GitHub token`:
-- set token in environment or `.env`
-- check key matches `providers.github.tokenEnv`
+# verify auth + config
+node packages/cli/dist/index.js validate
+```
 
-`scope.repos must include at least one owner/repo`:
-- add at least one repo in `.repodigest.yml`
+## Docs
 
-`Invalid date value`:
-- use ISO timestamp like `2026-02-14T00:00:00Z`
-- or supported shortcuts (`monday`, `today`, `yesterday`, `now`)
-
-## Contributing
-
-See `CONTRIBUTING.md`.
+- Config: `docs/CONFIG.md`
+- Plugins: `docs/PLUGINS.md`
+- KPI: `docs/KPI.md`
 
 ## License
 

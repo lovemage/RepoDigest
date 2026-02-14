@@ -99,7 +99,7 @@ npx repodigest init --project --yes --repo owner/repo
 One-command quick setup:
 
 ```bash
-npx repodigest init --quick --project --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
+npx repodigest init --quick --project --repo owner/repo
 ```
 
 One-line global install to `agentrule`:
@@ -117,7 +117,7 @@ npx repodigest init --agentrule --yes --repo owner/repo
 - `--lang <en|zh-TW|both>`
 - `--timezone <IANA timezone>`
 - `--token-source <browser>`: browser auth only.
-- `--client-id <id>`: GitHub OAuth client id for browser auth.
+- `--client-id <id>`: optional GitHub OAuth client id (needed only when GitHub CLI `gh` is unavailable).
 - `--scope <value>`: OAuth scopes for browser auth (default `repo`).
 - `--no-browser`: do not auto-open browser; print URL/code only.
 - `--components <cli|ide|action|all>`: only for project target.
@@ -215,14 +215,14 @@ Options:
 GitHub browser login/logout (OAuth device flow).
 
 ```bash
-npx repodigest auth login --client-id <GITHUB_OAUTH_CLIENT_ID>
+npx repodigest auth login
 npx repodigest auth logout
 ```
 
 Options:
 - `--project`: auth against project target (default).
 - `--agentrule`: auth against global agentrule target.
-- `--client-id <id>`: required for `login`, unless `REPODIGEST_GITHUB_CLIENT_ID` is set.
+- `--client-id <id>`: optional; use only if you do not use GitHub CLI `gh`.
 - `--scope <value>`: OAuth scope list, default `repo`.
 - `--token-env <key>`: env key to write/remove in `.env`.
 - `--no-browser`: do not auto-open browser; print URL/code only.

@@ -3,6 +3,12 @@
 每天都在看 GitHub，卻還要手動整理 standup？  
 `RepoDigest` 幫你把 Issue / PR 活動自動整理成「今天做了什麼、卡在哪、接下來要做什麼」。
 
+## 版本導覽
+
+- 英文版（首頁）: `README.md`
+- 繁中技術版: `README.zh-TW.md`
+- 繁中白話版（本頁）: `README.marketing.zh-TW.md`
+
 你可以把它當成：
 - 你的每日工作摘要機
 - standup 前 30 秒快速整理器
@@ -20,7 +26,7 @@
 ### 0) 一行完成安裝 + 授權 + 驗證（推薦）
 
 ```bash
-node packages/cli/dist/index.js init --quick --project --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
+node packages/cli/dist/index.js init --quick --project --repo owner/repo
 ```
 
 ### 1) 安裝
@@ -33,13 +39,13 @@ npm run build
 ### 2) 一行初始化（專案內）
 
 ```bash
-node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
+node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser
 ```
 
 如果你不想手動貼 Token，可以在安裝流程直接授權：
 
 ```bash
-node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
+node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser
 ```
 
 ### 3) 驗證設定
@@ -51,7 +57,7 @@ node packages/cli/dist/index.js validate
 ### 3.5) 不想手貼 Token？用瀏覽器登入
 
 ```bash
-node packages/cli/dist/index.js auth login --client-id <GITHUB_OAUTH_CLIENT_ID>
+node packages/cli/dist/index.js auth login
 ```
 
 ### 4) 產生今天摘要
@@ -103,7 +109,7 @@ node packages/cli/dist/index.js range --since monday --until today
 
 ## 下一步
 
-- 技術版說明：`README.md`
+- 英文版（首頁）：`README.md`
 - 繁中完整設定：`README.zh-TW.md`
 - 設定細節：`docs/CONFIG.zh-TW.md`
 - KPI 與驗證流程：`docs/KPI.md`

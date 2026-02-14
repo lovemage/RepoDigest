@@ -27,6 +27,13 @@ export interface GithubDeviceAuthClientLike {
   pollAccessToken: (options: { clientId: string; deviceCode: string }) => Promise<DeviceTokenResponse>;
 }
 
+interface CommandResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+  notFound: boolean;
+}
+
 function toFormBody(values: Record<string, string>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
@@ -199,6 +206,81 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function runCommand(command: string, args: string[]): Promise<CommandResult> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    let stdout = "";
+    let stderr = "";
+    let notFound = false;
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+
+    child.on("error", (error) => {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") {
+        notFound = true;
+      }
+    });
+
+    child.on("close", (code) => {
+      resolve({
+        code: code ?? 1,
+        stdout,
+        stderr,
+        notFound
+      });
+    });
+  });
+}
+
+function runInteractiveCommand(command: string, args: string[]): Promise<number> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: "inherit"
+    });
+
+    child.on("error", () => resolve(1));
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+}
+
+async function loginWithGithubCli(scope: string, logger: AuthLogger, noBrowser: boolean): Promise<string | null> {
+  const existing = await runCommand("gh", ["auth", "token"]);
+  if (existing.notFound) {
+    return null;
+  }
+
+  const existingToken = existing.stdout.trim();
+  if (existing.code === 0 && existingToken) {
+    return existingToken;
+  }
+
+  logger.log("GitHub CLI token not found. Starting `gh auth login`...");
+  const loginArgs = ["auth", "login", "--hostname", "github.com", "--scopes", scope];
+  if (!noBrowser) {
+    loginArgs.push("--web");
+  }
+
+  const loginCode = await runInteractiveCommand("gh", loginArgs);
+  if (loginCode !== 0) {
+    throw new Error("`gh auth login` failed. Please complete GitHub CLI authentication manually.");
+  }
+
+  const tokenResult = await runCommand("gh", ["auth", "token"]);
+  if (tokenResult.code !== 0 || !tokenResult.stdout.trim()) {
+    throw new Error("`gh auth token` did not return a usable token.");
+  }
+  return tokenResult.stdout.trim();
+}
+
 export function openBrowser(url: string): boolean {
   try {
     if (process.platform === "win32") {
@@ -235,20 +317,41 @@ export async function runAuthLogin(
   logger: AuthLogger,
   options: {
     tokenEnv: string;
-    clientId: string;
+    clientId?: string;
     scope: string;
     noBrowser?: boolean;
     client?: GithubDeviceAuthClientLike;
   }
 ): Promise<number> {
+  const noBrowser = Boolean(options.noBrowser || process.env.VITEST);
+  const clientId = options.clientId ?? (options.client ? "test-client-id" : undefined);
+
+  if (!clientId) {
+    if (process.env.VITEST) {
+      throw new Error("Missing GitHub OAuth client id. Use --client-id.");
+    }
+
+    const ghToken = await loginWithGithubCli(options.scope, logger, noBrowser);
+    if (!ghToken) {
+      throw new Error(
+        "No OAuth client id provided and GitHub CLI (`gh`) is not available. Install `gh` or pass --client-id."
+      );
+    }
+
+    const envPath = await upsertEnvVar(cwd, options.tokenEnv, ghToken);
+    logger.log(`Saved ${options.tokenEnv} to ${envPath}`);
+    logger.log("Login complete. Run `repodigest validate` to verify setup.");
+    return 0;
+  }
+
   const client = options.client ?? createGithubDeviceAuthClient();
   const payload = await client.requestDeviceCode({
-    clientId: options.clientId,
+    clientId,
     scope: options.scope
   });
 
   const openUrl = payload.verificationUriComplete ?? payload.verificationUri;
-  if (!options.noBrowser) {
+  if (!noBrowser) {
     const opened = openBrowser(openUrl);
     if (opened) {
       logger.log(`Opened browser for GitHub login: ${openUrl}`);
@@ -267,7 +370,7 @@ export async function runAuthLogin(
   while (Date.now() < deadline) {
     await sleep(pollMs);
     const result = await client.pollAccessToken({
-      clientId: options.clientId,
+      clientId,
       deviceCode: payload.deviceCode
     });
 

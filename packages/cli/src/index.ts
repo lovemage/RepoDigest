@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { input as promptInput, select as promptSelect } from "@inquirer/prompts";
+import { select as promptSelect } from "@inquirer/prompts";
 import { access, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1073,47 +1073,11 @@ async function runInit(
 ): Promise<number> {
   try {
     const parsed = parseInitArgs(args);
-    if (
-      (parsed.yes || parsed.quick) &&
-      (parsed.tokenSource ?? "browser") === "browser" &&
-      !parsed.clientId &&
-      !process.env.REPODIGEST_GITHUB_CLIENT_ID
-    ) {
-      throw new Error(
-        "Missing GitHub OAuth client id. Use --client-id or set REPODIGEST_GITHUB_CLIENT_ID."
-      );
-    }
-
-    const resolveClientId = async (): Promise<string | undefined> => {
-      const configured = parsed.clientId ?? process.env.REPODIGEST_GITHUB_CLIENT_ID;
-      if (configured) {
-        return configured;
-      }
-      if (parsed.yes || parsed.quick) {
-        return undefined;
-      }
-
-      const askInput =
-        runtimeOptions.prompts?.input ??
-        ((options: { message: string; default?: string }) => promptInput(options));
-      const provided = (
-        await askInput({
-          message: "GitHub OAuth client id (required for browser login)",
-          default: ""
-        })
-      ).trim();
-      return provided || undefined;
-    };
+    const resolveClientId = (): string | undefined =>
+      parsed.clientId ?? process.env.REPODIGEST_GITHUB_CLIENT_ID;
 
     const completeBrowserAuth = async (installRoot: string): Promise<number> => {
-      const clientId = await resolveClientId();
-      if (!clientId) {
-        io.error(
-          "Initialization completed, but browser auth was skipped: missing GitHub OAuth client id."
-        );
-        io.error("Set REPODIGEST_GITHUB_CLIENT_ID or pass --client-id, then run `repodigest auth login`.");
-        return 1;
-      }
+      const clientId = resolveClientId();
 
       const tokenEnv = await resolveTokenEnvKey(installRoot);
       if (!parsed.yes && !parsed.quick) {
@@ -1136,9 +1100,9 @@ async function runInit(
 
       return runAuthLogin(installRoot, io, {
         tokenEnv,
-        clientId,
         scope: parsed.authScope ?? "repo",
-        noBrowser: parsed.noBrowser,
+        noBrowser: parsed.noBrowser || Boolean(runtimeOptions.createGithubDeviceAuthClient),
+        ...(clientId ? { clientId } : {}),
         ...(runtimeOptions.createGithubDeviceAuthClient
           ? { client: runtimeOptions.createGithubDeviceAuthClient() }
           : {})
@@ -1262,7 +1226,7 @@ async function runAuth(
       io.log("  repodigest auth logout [--token-env <key>]");
       io.log("Options:");
       io.log("  --project|--agentrule   target root for .env file");
-      io.log("  --client-id <id>        GitHub OAuth app client id");
+      io.log("  --client-id <id>        optional OAuth app client id (fallback when `gh` is unavailable)");
       io.log("  --scope <value>         default: repo");
       io.log("  --token-env <key>       default: providers.github.tokenEnv or GITHUB_TOKEN");
       io.log("  --no-browser            print URL only, do not auto-open browser");
@@ -1277,17 +1241,12 @@ async function runAuth(
     }
 
     const clientId = parsed.clientId ?? process.env.REPODIGEST_GITHUB_CLIENT_ID;
-    if (!clientId) {
-      throw new Error(
-        "Missing GitHub OAuth client id. Use --client-id or set REPODIGEST_GITHUB_CLIENT_ID."
-      );
-    }
 
-    return runAuthLogin(install.root, io, {
+    return await runAuthLogin(install.root, io, {
       tokenEnv,
-      clientId,
       scope: parsed.scope,
       noBrowser: parsed.noBrowser,
+      ...(clientId ? { clientId } : {}),
       ...(runtimeOptions.createGithubDeviceAuthClient
         ? { client: runtimeOptions.createGithubDeviceAuthClient() }
         : {})
@@ -1462,7 +1421,7 @@ function printHelp(io: CliIO): void {
   io.log("  --lang <en|zh-TW|both>");
   io.log("  --timezone <IANA timezone>");
   io.log("  --token-source <browser>  browser auth only");
-  io.log("  --client-id <id>    GitHub OAuth client id for browser auth");
+  io.log("  --client-id <id>    optional GitHub OAuth client id");
   io.log("  --scope <value>     OAuth scope for browser auth (default: repo)");
   io.log("  --no-browser        print auth URL only; do not auto-open browser");
   io.log("  --components <cli|ide|action|all>");
@@ -1481,11 +1440,11 @@ function printHelp(io: CliIO): void {
   io.log("  --yes               required safety flag for removal");
   io.log("  --keep-output       keep generated repodigest output files");
   io.log("Auth options:");
-  io.log("  auth login --client-id <id> [--scope repo] [--token-env GITHUB_TOKEN]");
+  io.log("  auth login [--client-id <id>] [--scope repo] [--token-env GITHUB_TOKEN]");
   io.log("  auth logout [--token-env GITHUB_TOKEN]");
   io.log("  auth ... --project|--agentrule");
   io.log("Example one-line project install:");
-  io.log("  repodigest init --project --yes --repo owner/repo --token-source browser --client-id <id>");
+  io.log("  repodigest init --quick --project --repo owner/repo");
 }
 
 export async function runCli(
