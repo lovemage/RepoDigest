@@ -40,10 +40,23 @@ export interface GithubPullRequest {
   user?: { login: string };
 }
 
+export interface GithubCommit {
+  sha: string;
+  html_url?: string;
+  commit: {
+    message: string;
+    author?: { name?: string; date?: string | null };
+    committer?: { name?: string; date?: string | null };
+  };
+  author?: { login: string } | null;
+  committer?: { login: string } | null;
+}
+
 export interface GithubNormalizeInput {
   repo: string;
   issues?: GithubIssue[];
   pullRequests?: GithubPullRequest[];
+  commits?: GithubCommit[];
 }
 
 export interface GithubFetchOptions {
@@ -68,6 +81,12 @@ export interface GithubApi {
     until?: string;
   }): Promise<GithubPullRequest[]>;
   listMilestones(params: { owner: string; repo: string }): Promise<GithubMilestone[]>;
+  listCommits?: (params: {
+    owner: string;
+    repo: string;
+    since?: string;
+    until?: string;
+  }) => Promise<GithubCommit[]>;
 }
 
 export interface GithubProviderClientOptions {
@@ -234,7 +253,34 @@ export function normalizeGithubData(input: GithubNormalizeInput): Event[] {
     return [baseEvent];
   });
 
-  return [...issueEvents, ...prEvents].sort(
+  const commitEvents = (input.commits ?? []).map<Event>((entry) => {
+    const rawMessage = entry.commit.message ?? "";
+    const title = rawMessage.split(/\r?\n/)[0]?.trim() || "(commit)";
+    const timestamp =
+      entry.commit.author?.date ??
+      entry.commit.committer?.date ??
+      new Date().toISOString();
+    const author =
+      entry.author?.login ??
+      entry.committer?.login ??
+      entry.commit.author?.name ??
+      entry.commit.committer?.name;
+
+    return {
+      id: `commit:${entry.sha}`,
+      provider: "github",
+      repo: input.repo,
+      type: "commit",
+      title,
+      ...(rawMessage ? { body: rawMessage } : {}),
+      ...(entry.html_url ? { url: entry.html_url } : {}),
+      ...(author ? { author } : {}),
+      timestamp,
+      fields: { sha: entry.sha }
+    };
+  });
+
+  return [...issueEvents, ...prEvents, ...commitEvents].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 }
@@ -350,6 +396,51 @@ class OctokitGithubApi implements GithubApi {
       due_on: milestone.due_on
     }));
   }
+
+  async listCommits(params: {
+    owner: string;
+    repo: string;
+    since?: string;
+    until?: string;
+  }): Promise<GithubCommit[]> {
+    const data = await this.octokit.paginate(this.octokit.rest.repos.listCommits, {
+      owner: params.owner,
+      repo: params.repo,
+      per_page: 100,
+      ...(params.since ? { since: params.since } : {}),
+      ...(params.until ? { until: params.until } : {})
+    });
+
+    return data.map((item) => {
+      const commitAuthor =
+        item.commit.author && (item.commit.author.name || item.commit.author.date)
+          ? {
+              ...(item.commit.author.name ? { name: item.commit.author.name } : {}),
+              ...(item.commit.author.date ? { date: item.commit.author.date } : {})
+            }
+          : undefined;
+
+      const commitCommitter =
+        item.commit.committer && (item.commit.committer.name || item.commit.committer.date)
+          ? {
+              ...(item.commit.committer.name ? { name: item.commit.committer.name } : {}),
+              ...(item.commit.committer.date ? { date: item.commit.committer.date } : {})
+            }
+          : undefined;
+
+      return {
+        sha: item.sha,
+        ...(item.html_url ? { html_url: item.html_url } : {}),
+        commit: {
+          message: item.commit.message,
+          ...(commitAuthor ? { author: commitAuthor } : {}),
+          ...(commitCommitter ? { committer: commitCommitter } : {})
+        },
+        ...(item.author?.login ? { author: { login: item.author.login } } : {}),
+        ...(item.committer?.login ? { committer: { login: item.committer.login } } : {})
+      };
+    });
+  }
 }
 
 export function createGithubApi(token: string, userAgent = "repodigest/0.1.0"): GithubApi {
@@ -382,7 +473,7 @@ export class GithubProviderClient {
       options.repos.map(async (repoRef) => {
         const { owner, repo } = parseRepoRef(repoRef);
         try {
-          const [issues, pullRequests, milestones] = await Promise.all([
+          const [issues, pullRequests, milestones, commits] = await Promise.all([
             this.api.listIssues({
               owner,
               repo,
@@ -395,7 +486,15 @@ export class GithubProviderClient {
               ...(options.since ? { since: options.since } : {}),
               ...(options.until ? { until: options.until } : {})
             }),
-            this.api.listMilestones({ owner, repo })
+            this.api.listMilestones({ owner, repo }),
+            this.api.listCommits
+              ? this.api.listCommits({
+                  owner,
+                  repo,
+                  ...(options.since ? { since: options.since } : {}),
+                  ...(options.until ? { until: options.until } : {})
+                })
+              : Promise.resolve([])
           ]);
 
           const filteredIssues = withMilestoneDueFallback(issues, milestones).filter((issue) => {
@@ -414,10 +513,17 @@ export class GithubProviderClient {
             return hasAnyLabel(normalizeLabels(pr.labels), labelFilter);
           });
 
+          const filteredCommits = commits.filter((commit) => {
+            const marker =
+              commit.commit.author?.date ?? commit.commit.committer?.date ?? "";
+            return marker ? inRange(marker, sinceDate, untilDate) : false;
+          });
+
           return normalizeGithubData({
             repo: `${owner}/${repo}`,
             issues: filteredIssues,
-            pullRequests: filteredPRs
+            pullRequests: filteredPRs,
+            commits: filteredCommits
           });
         } catch (error: unknown) {
           throw formatProviderError(error, repoRef);

@@ -1,4 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
@@ -272,15 +273,169 @@ function runInteractiveCommand(command: string, args: string[]): Promise<number>
   });
 }
 
-async function loginWithGithubCli(scope: string, logger: AuthLogger, noBrowser: boolean): Promise<string | null> {
-  const existing = await runCommand("gh", ["auth", "token"]);
-  if (existing.notFound) {
-    return null;
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function looksLikeMissingCommand(message: string): boolean {
+  return /not recognized as an internal or external command|command not found|no such file or directory/i.test(
+    message
+  );
+}
+
+async function resolveWindowsGhPath(): Promise<string | null> {
+  const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
+  const localAppData = process.env.LOCALAPPDATA ?? "";
+  const candidates = [
+    path.join(programFiles, "GitHub CLI", "gh.exe"),
+    path.join(localAppData, "Programs", "GitHub CLI", "gh.exe"),
+    path.join(localAppData, "Microsoft", "WinGet", "Links", "gh.exe")
+  ];
+
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+async function runGhCommand(args: string[]): Promise<CommandResult> {
+  const direct = await runCommand("gh", args);
+  if (!direct.notFound && !looksLikeMissingCommand(`${direct.stdout}\n${direct.stderr}`)) {
+    return direct;
   }
 
-  const existingToken = existing.stdout.trim();
-  if (existing.code === 0 && existingToken) {
-    return existingToken;
+  if (process.platform === "win32") {
+    const ghPath = await resolveWindowsGhPath();
+    if (ghPath) {
+      const viaPath = await runCommand(ghPath, args);
+      if (!viaPath.notFound) {
+        return viaPath;
+      }
+    }
+
+    const viaCmd = await runCommand("cmd", ["/c", "gh", ...args]);
+    if (!looksLikeMissingCommand(`${viaCmd.stdout}\n${viaCmd.stderr}`)) {
+      return viaCmd;
+    }
+  }
+
+  return {
+    code: 1,
+    stdout: "",
+    stderr: "GitHub CLI command `gh` is not available in this environment.",
+    notFound: true
+  };
+}
+
+async function runGhInteractiveCommand(args: string[]): Promise<number> {
+  let code = await runInteractiveCommand("gh", args);
+  if (code === 0 || process.platform !== "win32") {
+    return code;
+  }
+
+  const ghPath = await resolveWindowsGhPath();
+  if (ghPath) {
+    return runInteractiveCommand(ghPath, args);
+  }
+
+  return runInteractiveCommand("cmd", ["/c", "gh", ...args]);
+}
+
+function extractTokenFromGhStatus(raw: string): string | null {
+  const line = raw
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .find((entry) => /^(?:-\s*)?token:\s+/i.test(entry));
+  if (!line) {
+    return null;
+  }
+  const value = line.replace(/^(?:-\s*)?token:\s+/i, "").trim();
+  if (!value || value.includes("*")) {
+    return null;
+  }
+  return value;
+}
+
+function parseGithubHostToken(hostsRaw: string): string | null {
+  const lines = hostsRaw.split(/\r?\n/);
+  let inGithubCom = false;
+  for (const line of lines) {
+    const topLevel = line.match(/^([^\s#][^:]*):\s*$/);
+    if (topLevel?.[1]) {
+      inGithubCom = topLevel[1] === "github.com";
+      continue;
+    }
+    if (!inGithubCom) {
+      continue;
+    }
+    const tokenMatch = line.match(/^\s*oauth_token:\s*(.+?)\s*$/);
+    if (!tokenMatch?.[1]) {
+      continue;
+    }
+    const token = tokenMatch[1].replace(/^['"]|['"]$/g, "").trim();
+    if (token) {
+      return token;
+    }
+  }
+  return null;
+}
+
+async function readGhHostsToken(): Promise<string | null> {
+  const candidates: string[] = [];
+  if (process.env.GH_CONFIG_DIR) {
+    candidates.push(path.join(process.env.GH_CONFIG_DIR, "hosts.yml"));
+  }
+  if (process.platform === "win32" && process.env.APPDATA) {
+    candidates.push(path.join(process.env.APPDATA, "GitHub CLI", "hosts.yml"));
+  }
+  candidates.push(path.join(os.homedir(), ".config", "gh", "hosts.yml"));
+
+  for (const candidate of candidates) {
+    try {
+      const raw = await readFile(candidate, "utf-8");
+      const token = parseGithubHostToken(raw);
+      if (token) {
+        return token;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function resolveGithubCliToken(): Promise<string | null> {
+  const tokenResult = await runGhCommand(["auth", "token", "--hostname", "github.com"]);
+  const token = tokenResult.stdout.trim();
+  if (tokenResult.code === 0 && token) {
+    return token;
+  }
+
+  const statusResult = await runGhCommand(["auth", "status", "--hostname", "github.com", "--show-token"]);
+  const fromStatus = extractTokenFromGhStatus(`${statusResult.stdout}\n${statusResult.stderr}`);
+  if (fromStatus) {
+    return fromStatus;
+  }
+
+  return readGhHostsToken();
+}
+
+async function loginWithGithubCli(scope: string, logger: AuthLogger, noBrowser: boolean): Promise<string | null> {
+  const existing = await resolveGithubCliToken();
+  if (existing) {
+    return existing;
+  }
+
+  const ghAvailability = await runGhCommand(["--version"]);
+  if (ghAvailability.notFound) {
+    return null;
   }
 
   logger.log("GitHub CLI token not found. Starting `gh auth login`...");
@@ -289,16 +444,34 @@ async function loginWithGithubCli(scope: string, logger: AuthLogger, noBrowser: 
     loginArgs.push("--web");
   }
 
-  const loginCode = await runInteractiveCommand("gh", loginArgs);
+  const loginCode = await runGhInteractiveCommand(loginArgs);
   if (loginCode !== 0) {
     throw new Error("`gh auth login` failed. Please complete GitHub CLI authentication manually.");
   }
 
-  const tokenResult = await runCommand("gh", ["auth", "token"]);
-  if (tokenResult.code !== 0 || !tokenResult.stdout.trim()) {
-    throw new Error("`gh auth token` did not return a usable token.");
+  const token = await resolveGithubCliToken();
+  if (token) {
+    return token;
   }
-  return tokenResult.stdout.trim();
+
+  logger.log("`gh auth token` could not return a token. Retrying with insecure storage fallback...");
+  const fallbackArgs = ["auth", "login", "--hostname", "github.com", "--scopes", scope, "--insecure-storage"];
+  if (!noBrowser) {
+    fallbackArgs.push("--web");
+  }
+  const fallbackCode = await runGhInteractiveCommand(fallbackArgs);
+  if (fallbackCode !== 0) {
+    throw new Error("`gh auth login --insecure-storage` failed. Please retry login in GitHub CLI.");
+  }
+
+  const fallbackToken = await resolveGithubCliToken();
+  if (fallbackToken) {
+    return fallbackToken;
+  }
+
+  throw new Error(
+    "GitHub CLI login succeeded, but no token could be read. Run `gh auth token --hostname github.com` and ensure it prints a token."
+  );
 }
 
 export function openBrowser(url: string): boolean {

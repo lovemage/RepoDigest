@@ -1,6 +1,7 @@
 # RepoDigest（白話版）
 
 每天一鍵，把你在 GitHub 做的事變成可貼到 standup 的摘要。
+沒有 Issue / PR 也可以，現在會抓 `commit` 事件。
 
 ## 語言版本
 

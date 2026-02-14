@@ -1,6 +1,9 @@
 timezone: Asia/Taipei
 scope:
-  repos: []
+  repos:
+    - lovemage/RepoDigest
+    - lovemage/auraway.org
+    - lovemage/morea
 providers:
   github:
     tokenEnv: GITHUB_TOKEN

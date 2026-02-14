@@ -1,6 +1,7 @@
 # RepoDigest（技術版）
 
 把 GitHub 的 Issue / PR 活動整理成每日 standup 摘要。
+也支援 `commit` 事件（個人開發無 Issue/PR 也可使用）。
 
 ## 語言版本
 

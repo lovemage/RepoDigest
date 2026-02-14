@@ -1,6 +1,7 @@
 # RepoDigest
 
 Turn GitHub activity into a standup report in minutes.
+Now includes `commit` events (useful for solo workflows without Issues/PRs).
 
 `RepoDigest` auto-summarizes your Issues/PRs into:
 - `Due Today`
