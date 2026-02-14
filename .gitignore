@@ -3,4 +3,8 @@ dist/
 coverage/
 repodigest/
 .env
+.repodigest.yml
 *.tsbuildinfo
+plan.md
+implementation_plan.md
+task.md

@@ -17,6 +17,12 @@
 
 ## 3 分鐘上手
 
+### 0) 一行完成安裝 + 授權 + 驗證（推薦）
+
+```bash
+node packages/cli/dist/index.js init --quick --project --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
+```
+
 ### 1) 安裝
 
 ```bash

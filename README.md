@@ -2,150 +2,158 @@
 
 Generate standup-ready markdown digests from GitHub repository activity.
 
-## About
+## What It Does
 
-RepoDigest collects recent GitHub issue/PR activity, classifies work status, and renders a readable digest for daily standups.
+RepoDigest collects recent GitHub issue/PR activity, classifies status (`Done`, `In Progress`, `Blocked`, `Next`, `Due Today`), and renders output for:
+- internal markdown standups
+- X threads
+- Threads posts
 
-The current implementation focuses on a reliable CLI workflow:
-- initialize project config
-- validate config/token setup
-- generate `today` and `range` digests
+## System Dependencies
 
-## Features
-
-- Interactive setup with `repodigest init`
-- Config validation with Zod (`.repodigest.yml`)
-- GitHub provider with issue/PR/milestone normalization
-- Internal renderer with deterministic output + golden tests
-- X renderer with deterministic thread splitting (280 chars)
-- Threads renderer for build-in-public style posts
-- Time-window digests:
-  - `today` (last 24 hours by default)
-  - `range` (custom `--since/--until`)
-
-## Requirements
-
+Install these first:
+- Git
 - Node.js `>= 22`
-- npm `>= 10`
-- A GitHub token with repo read access
+- npm `>= 10` (usually bundled with Node.js)
 
-## Installation (From Source)
+Version checks:
+```bash
+git --version
+node --version
+npm --version
+```
 
+## Project Setup (From Source)
+
+1. Clone:
+```bash
+git clone https://github.com/lovemage/RepoDigest.git
+cd RepoDigest
+```
+
+2. Install workspace dependencies:
 ```bash
 npm install
+```
+
+3. Build:
+```bash
 npm run build
 ```
 
-## Quick Start
-
-1. Initialize config and optional helper files:
+4. (Optional but recommended) verify local quality checks:
 ```bash
-node packages/cli/dist/index.js init
+npm run typecheck
+npm test
 ```
 
-One-line non-interactive install (project):
+## Fastest Install Flow
+
+One command for init + browser auth + config validation:
 ```bash
-node packages/cli/dist/index.js init --project --yes --repo owner/repo
+node packages/cli/dist/index.js init --quick --project --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
 ```
 
-One-line install with browser auth in init:
-```bash
-node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
-```
+## GitHub Token: How To Obtain And Verify
 
-One-line non-interactive install (agentrule global):
-```bash
-node packages/cli/dist/index.js init --agentrule --yes --repo owner/repo
-```
+### Option A (Recommended): Browser OAuth login from CLI
 
-2. Validate config and token:
-```bash
-node packages/cli/dist/index.js validate
-```
-
-Browser login (OAuth device flow, optional):
+Use OAuth Device Flow:
 ```bash
 node packages/cli/dist/index.js auth login --client-id <GITHUB_OAUTH_CLIENT_ID>
 ```
 
-3. Generate today digest:
+Or do it directly during init:
 ```bash
-node packages/cli/dist/index.js today
+node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
 ```
 
-4. Generate range digest:
+### Option B: Personal Access Token (PAT)
+
+1. Go to GitHub settings and create a token with repo read permission.
+2. Put token in `.env`:
+```dotenv
+GITHUB_TOKEN=ghp_xxx_or_github_pat_xxx
+```
+3. Ensure `.repodigest.yml` uses the same key:
+```yaml
+providers:
+  github:
+    tokenEnv: GITHUB_TOKEN
+```
+
+### Verify Token Is Actually Working
+
+Run:
 ```bash
+node packages/cli/dist/index.js validate
+```
+
+Expected result:
+- `Config is valid.`
+- no missing token error
+
+Then run a real fetch:
+```bash
+node packages/cli/dist/index.js today --dry-run
+```
+
+If token or repo permission is wrong, this command will fail with actionable errors.
+
+## Quick Start
+
+Interactive setup:
+```bash
+node packages/cli/dist/index.js init
+```
+
+Non-interactive project install:
+```bash
+node packages/cli/dist/index.js init --project --yes --repo owner/repo
+```
+
+Generate digest:
+```bash
+node packages/cli/dist/index.js today
 node packages/cli/dist/index.js range --since monday --until today
 ```
 
-5. Update config quickly (for example, add repo):
-```bash
-node packages/cli/dist/index.js update --add-repo owner/new-repo --lang zh-TW
-```
+## CLI Commands
 
-6. Remove installed files (project target):
-```bash
-node packages/cli/dist/index.js remove --yes
-```
-
-## Usage
-
-### `today`
-
-Generate a digest for recent activity (default: last 24 hours).
-
+`today`:
 ```bash
 node packages/cli/dist/index.js today
 node packages/cli/dist/index.js today --dry-run
 node packages/cli/dist/index.js today --preview --target x --tone playful --lang zh-TW
-node packages/cli/dist/index.js today --since yesterday --until now
 ```
 
-### `range`
-
-Generate a digest for a custom time window.
-
+`range`:
 ```bash
 node packages/cli/dist/index.js range --since 2026-02-10 --until 2026-02-14
 node packages/cli/dist/index.js range --since monday --until now --preview --target threads
-node packages/cli/dist/index.js range --since monday --until today --dry-run
 ```
 
-### `update`
-
-Update `.repodigest.yml` without editing file manually.
-
+`update`:
 ```bash
 node packages/cli/dist/index.js update --add-repo owner/repo-b --lang zh-TW
 node packages/cli/dist/index.js update --remove-repo owner/repo-old --target x --tone playful
-node packages/cli/dist/index.js update --agentrule --add-repo owner/global-repo
 ```
 
-### `remove`
-
-Remove RepoDigest-managed files from target (`--yes` required).
-
+`remove`:
 ```bash
 node packages/cli/dist/index.js remove --yes
 node packages/cli/dist/index.js remove --agentrule --yes --keep-output
 ```
 
-### `auth`
-
-Login/logout GitHub token via browser OAuth device flow.
-
+`auth`:
 ```bash
 node packages/cli/dist/index.js auth login --client-id <GITHUB_OAUTH_CLIENT_ID>
 node packages/cli/dist/index.js auth logout
 ```
 
-Notes:
-- Use `--token-env <KEY>` to store/remove a custom env key.
-- Use `--project` or `--agentrule` to choose target root.
-- You can set `REPODIGEST_GITHUB_CLIENT_ID` instead of passing `--client-id`.
-- `init --token-source browser` can complete authorization during installation.
+## Date Shortcuts
 
-Accepted shortcuts for `--since/--until`:
+Supported for `--since` / `--until`:
 - `now`
 - `today`
 - `yesterday`
@@ -153,67 +161,39 @@ Accepted shortcuts for `--since/--until`:
 
 ## Output Files
 
-- Daily:
-  - `repodigest/daily/YYYY-MM-DD.md`
-  - `repodigest/latest.md`
-- Range:
-  - `repodigest/range/YYYY-MM-DD_to_YYYY-MM-DD.md`
-  - `repodigest/latest.md`
+Daily output:
+- `repodigest/daily/YYYY-MM-DD.md`
+- `repodigest/latest.md`
 
-## Configuration
+Range output:
+- `repodigest/range/YYYY-MM-DD_to_YYYY-MM-DD.md`
+- `repodigest/latest.md`
 
-See full config reference in `docs/CONFIG.md`.
-Plugin references:
+## Documentation
+
+- `docs/CONFIG.md`
 - `docs/PLUGINS.md`
 - `docs/LLM_PLUGIN.md`
 - `docs/KPI.md`
-
-Global install target path:
-- default: `~/.agentrule/repodigest`
-- override via environment variable: `AGENTRULE_HOME`
+- `README.zh-TW.md`
+- `README.marketing.zh-TW.md`
 
 ## Troubleshooting
 
-Common first-run issues:
+`Missing GitHub token`:
+- set token in environment or `.env`
+- check key matches `providers.github.tokenEnv`
 
-- `Missing GitHub token`
-  - Set the token key defined in `.repodigest.yml` (`providers.github.tokenEnv`) in environment variables or `.env`.
-- `scope.repos must include at least one owner/repo`
-  - Add at least one repo to `.repodigest.yml`:
-    `scope.repos: [owner/repo]`
-- `Invalid date value` in `range`
-  - Use ISO timestamp (`2026-02-14T00:00:00Z`) or supported shortcuts (`monday`, `today`, `yesterday`, `now`).
+`scope.repos must include at least one owner/repo`:
+- add at least one repo in `.repodigest.yml`
 
-## Development
-
-Run checks locally:
-
-```bash
-npm run typecheck
-npm test
-npm run build
-```
-
-Core workspace packages:
-- `packages/core`
-- `packages/provider-github`
-- `packages/renderer-internal`
-- `packages/cli`
-
-## Roadmap
-
-- Renderer targets for X and Threads
-- Additional providers (for example, local git)
-- Optional LLM summarizer plugin
+`Invalid date value`:
+- use ISO timestamp like `2026-02-14T00:00:00Z`
+- or supported shortcuts (`monday`, `today`, `yesterday`, `now`)
 
 ## Contributing
 
-Contributions are welcome.
-
-See `CONTRIBUTING.md` for:
-- development workflow
-- triage SLA
-- release note/changelog policy
+See `CONTRIBUTING.md`.
 
 ## License
 

@@ -252,6 +252,69 @@ describe("runCli", () => {
     expect(env).toMatch("GITHUB_TOKEN=gho_browser_token");
   });
 
+  it("supports quick setup flow in one command", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
+    tempDirs.push(dir);
+
+    const mockAuthClient: GithubDeviceAuthClientLike = {
+      requestDeviceCode: async () => ({
+        deviceCode: "device-code",
+        userCode: "ABCD-EFGH",
+        verificationUri: "https://github.com/login/device",
+        expiresIn: 120,
+        interval: 0
+      }),
+      pollAccessToken: async () => ({
+        status: "token",
+        accessToken: "gho_quick_token"
+      })
+    };
+
+    const { io, logs } = createMockIO();
+    const code = await runCli(
+      [
+        "init",
+        "--quick",
+        "--project",
+        "--repo",
+        "owner/repo-quick",
+        "--token-source",
+        "browser",
+        "--client-id",
+        "Iv1.test",
+        "--no-browser"
+      ],
+      dir,
+      {
+        io,
+        createGithubDeviceAuthClient: () => mockAuthClient
+      }
+    );
+
+    expect(code).toBe(0);
+    expect(logs.join("\n")).toMatch("Config is valid.");
+    expect(logs.join("\n")).toMatch("Quick setup complete.");
+  });
+
+  it("fails interactive init when no repo is provided", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
+    tempDirs.push(dir);
+
+    const prompts = createPromptAdapter({
+      installTarget: "project",
+      components: ["cli"],
+      tokenSource: "env",
+      repos: [],
+      lang: "zh-TW",
+      timezone: "Asia/Taipei"
+    });
+
+    const { io, errors } = createMockIO();
+    const code = await runCli(["init"], dir, { io, prompts });
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toMatch("At least one repository is required");
+  });
+
   it("delivers first digest from clean setup in one flow", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
     tempDirs.push(dir);

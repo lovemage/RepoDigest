@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { select as promptSelect } from "@inquirer/prompts";
+import { input as promptInput, select as promptSelect } from "@inquirer/prompts";
 import { access, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,6 +62,7 @@ interface WindowArgs {
 interface InitArgs {
   target?: InstallTarget;
   yes: boolean;
+  quick: boolean;
   repos: string[];
   language?: OutputLanguage;
   timezone?: string;
@@ -231,6 +232,7 @@ function parseWindowArgs(args: string[], options: { requireSince: boolean }): Wi
 function parseInitArgs(args: string[]): InitArgs {
   const result: InitArgs = {
     yes: false,
+    quick: false,
     repos: [],
     noBrowser: false
   };
@@ -243,6 +245,11 @@ function parseInitArgs(args: string[]): InitArgs {
 
     if (arg === "--yes") {
       result.yes = true;
+      continue;
+    }
+
+    if (arg === "--quick") {
+      result.quick = true;
       continue;
     }
 
@@ -1073,8 +1080,29 @@ async function runInit(
 ): Promise<number> {
   try {
     const parsed = parseInitArgs(args);
+    const resolveClientId = async (): Promise<string | undefined> => {
+      const configured = parsed.clientId ?? process.env.REPODIGEST_GITHUB_CLIENT_ID;
+      if (configured) {
+        return configured;
+      }
+      if (parsed.yes || parsed.quick) {
+        return undefined;
+      }
+
+      const askInput =
+        runtimeOptions.prompts?.input ??
+        ((options: { message: string; default?: string }) => promptInput(options));
+      const provided = (
+        await askInput({
+          message: "GitHub OAuth client id (required for browser login)",
+          default: ""
+        })
+      ).trim();
+      return provided || undefined;
+    };
+
     const completeBrowserAuth = async (installRoot: string): Promise<number> => {
-      const clientId = parsed.clientId ?? process.env.REPODIGEST_GITHUB_CLIENT_ID;
+      const clientId = await resolveClientId();
       if (!clientId) {
         io.error(
           "Initialization completed, but browser auth was skipped: missing GitHub OAuth client id."
@@ -1084,7 +1112,7 @@ async function runInit(
       }
 
       const tokenEnv = await resolveTokenEnvKey(installRoot);
-      if (!parsed.yes) {
+      if (!parsed.yes && !parsed.quick) {
         const askSelect =
           runtimeOptions.prompts?.select ??
           ((options: { message: string; choices: Array<{ name: string; value: string }> }) =>
@@ -1112,6 +1140,44 @@ async function runInit(
           : {})
       });
     };
+
+    if (parsed.quick) {
+      const target = parsed.target ?? "project";
+      const tokenSource = parsed.tokenSource ?? "browser";
+      if (parsed.repos.length === 0) {
+        throw new Error("Missing required option: --repo owner/repo (repeatable) for --quick mode.");
+      }
+
+      const result = await runInitPreset({
+        cwd,
+        target,
+        repos: parsed.repos,
+        tokenSource,
+        ...(parsed.language ? { outputLanguage: parsed.language } : {}),
+        ...(parsed.timezone ? { timezone: parsed.timezone } : {}),
+        ...(parsed.token ? { token: parsed.token } : {}),
+        ...(parsed.components ? { components: parsed.components } : {})
+      });
+
+      io.log(`Install target: ${result.installTarget}`);
+      io.log(`Install root: ${result.installRoot}`);
+      for (const file of result.createdFiles) {
+        io.log(`Created ${file}`);
+      }
+
+      if (result.tokenSource === "browser") {
+        const authCode = await completeBrowserAuth(result.installRoot);
+        if (authCode !== 0) {
+          return authCode;
+        }
+      }
+
+      const validateCode = await runValidate(result.installRoot, io);
+      if (validateCode === 0) {
+        io.log("Quick setup complete.");
+      }
+      return validateCode;
+    }
 
     if (parsed.yes) {
       const target = parsed.target ?? "project";
@@ -1389,6 +1455,7 @@ function printHelp(io: CliIO): void {
   io.log("  --project           install to current project");
   io.log("  --agentrule         install to global agentrule location");
   io.log("  --yes               non-interactive mode");
+  io.log("  --quick             one-command setup (init + optional browser auth + validate)");
   io.log("  --repo <owner/repo> repeatable");
   io.log("  --lang <en|zh-TW|both>");
   io.log("  --timezone <IANA timezone>");

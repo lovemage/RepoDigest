@@ -43,6 +43,11 @@ npm run build
 node packages/cli/dist/index.js init
 ```
 
+一行快速安裝（init + 瀏覽器授權 + validate）：
+```bash
+node packages/cli/dist/index.js init --quick --project --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
+```
+
 一行指令（project 安裝）：
 ```bash
 node packages/cli/dist/index.js init --project --yes --repo owner/repo

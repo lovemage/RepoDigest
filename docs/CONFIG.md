@@ -96,6 +96,12 @@ One-line project install:
 npx repodigest init --project --yes --repo owner/repo
 ```
 
+One-command quick setup:
+
+```bash
+npx repodigest init --quick --project --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
+```
+
 One-line global install to `agentrule`:
 
 ```bash
@@ -106,6 +112,7 @@ npx repodigest init --agentrule --yes --repo owner/repo
 - `--project`: install to current project.
 - `--agentrule`: install to global agentrule location.
 - `--yes`: non-interactive mode.
+- `--quick`: run init + optional browser auth + validate in one command.
 - `--repo <owner/repo>`: repeatable, required in non-interactive mode.
 - `--lang <en|zh-TW|both>`
 - `--timezone <IANA timezone>`

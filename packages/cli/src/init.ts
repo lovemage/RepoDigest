@@ -364,6 +364,9 @@ export async function runInitWizard(options: InitWizardOptions): Promise<InitWiz
   })) as TokenSource;
 
   const repos = await promptRepos(promptImpl);
+  if (repos.length === 0) {
+    throw new Error("At least one repository is required. Use owner/name.");
+  }
   const outputLanguage = (await promptImpl.select({
     message: "Output language",
     choices: [
