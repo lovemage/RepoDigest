@@ -53,6 +53,27 @@ output:
     enabled: false
     numbering: "1/1"
   summarizerPlugin: ./examples/plugins/sample-summarizer.mjs
+
+summaries:
+  defaultProfile: team
+  profiles:
+    team:
+      audience: team
+      style: professional
+      includeTechnicalDetails: true
+      language: en
+    cus:
+      audience: customer
+      style: natural
+      includeTechnicalDetails: false
+      language: zh-TW
+  identity:
+    githubLogin: your-github-login
+  ai:
+    enabled: false
+    baseUrl: https://api.openai.com/v1
+    model: gpt-4o-mini
+    apiKeyEnv: OPENAI_API_KEY
 ```
 
 ## Field rules
@@ -63,6 +84,10 @@ output:
 - `output.include.links`: include item links in rendered markdown.
 - `output.include.metrics`: include stats line in rendered markdown.
 - `output.summarizerPlugin`: optional module path/package for custom summarize hook.
+- `summaries.defaultProfile`: default profile key used by `repodigest sum`.
+- `summaries.profiles.<key>`: audience-specific summary style.
+- `summaries.identity.githubLogin`: optional filter to prioritize your own commits.
+- `summaries.ai`: optional OpenAI-compatible AI summarizer settings.
 
 ## Token resolution
 RepoDigest resolves GitHub token in this order:
@@ -183,6 +208,60 @@ npx repodigest range --since 2026-02-01T00:00:00Z --until 2026-02-14T23:59:59Z -
 Output files:
 - `repodigest/range/YYYY-MM-DD_to_YYYY-MM-DD.md`
 - `repodigest/latest.md`
+
+### `trending`
+Fetches repositories created today on GitHub, ranked by stars, then writes a bilingual-ready summary.
+
+```bash
+npx repodigest trending --wizard
+```
+
+Options:
+- `--lang <value>`: `en|zh-TW|both` (default `en`)
+- `--limit <number>`: `1..30` (default `10`)
+- `--wizard`: interactive prompts for language and limit
+
+Examples:
+```bash
+npx repodigest trending
+npx repodigest trending --lang zh-TW --limit 15
+npx repodigest trending --lang both --limit 8
+```
+
+Output files:
+- `repodigest/trending/YYYY-MM-DD.md`
+- `repodigest/latest-trending.md`
+
+### `sum`
+Summarizes today's commits for specific audiences.
+
+```bash
+npx repodigest sum cus
+```
+
+Profiles:
+- `cus`: customer-friendly natural language (less technical details)
+- `team`: professional tone for leadership/team updates
+- custom key: any profile in `summaries.profiles.<key>`
+
+Options:
+- positional `<profile>`: profile key, e.g. `cus`, `team`, `myboss`
+- `--profile <value>`: profile key (same as positional)
+- `--lang <value>`: `en|zh-TW|both` override
+- `--dry-run`: print summary only
+- `--ai`: force AI summarization if configured and API key exists
+
+Examples:
+```bash
+npx repodigest sum cus
+npx repodigest sum team --lang en
+npx repodigest sum myboss --dry-run
+npx repodigest sum cus --ai
+```
+
+Output files:
+- `repodigest/sum/<profile>/YYYY-MM-DD.md`
+- `repodigest/latest-sum-<profile>.md`
 
 ### `update`
 Updates existing `.repodigest.yml` in project or global target.

@@ -66,6 +66,12 @@ interface InitPlan {
   repos: string[];
   outputLanguage: OutputLanguage;
   timezone: string;
+  summaryDefaultProfile: string;
+  summaryGithubLogin?: string;
+  aiEnabled: boolean;
+  aiBaseUrl: string;
+  aiModel: string;
+  aiApiKeyEnv: string;
 }
 
 const actionWorkflowTemplate = `name: RepoDigest Daily
@@ -264,6 +270,14 @@ async function applyInitPlan(plan: InitPlan): Promise<InitWizardResult> {
   config.timezone = plan.timezone || "UTC";
   config.scope.repos = plan.repos;
   config.output.lang = plan.outputLanguage;
+  config.summaries.defaultProfile = plan.summaryDefaultProfile;
+  if (plan.summaryGithubLogin) {
+    config.summaries.identity.githubLogin = plan.summaryGithubLogin;
+  }
+  config.summaries.ai.enabled = plan.aiEnabled;
+  config.summaries.ai.baseUrl = plan.aiBaseUrl;
+  config.summaries.ai.model = plan.aiModel;
+  config.summaries.ai.apiKeyEnv = plan.aiApiKeyEnv;
 
   await writeFile(configPath, serializeConfig(config), "utf-8");
   createdFiles.push(configPath);
@@ -360,6 +374,54 @@ export async function runInitWizard(options: InitWizardOptions): Promise<InitWiz
     })
   ).trim();
 
+  const summaryDefaultProfile = await promptImpl.select({
+    message: "Default summary profile for `repodigest sum`",
+    choices: [
+      { name: "Team (professional)", value: "team" },
+      { name: "Customer (natural language)", value: "cus" }
+    ]
+  });
+
+  const summaryGithubLogin = (
+    await promptImpl.input({
+      message: "GitHub login for 'my commits' filter (optional)",
+      default: ""
+    })
+  ).trim();
+
+  const enableAi =
+    (await promptImpl.select({
+      message: "Enable optional AI summarizer setup now?",
+      choices: [
+        { name: "No (use built-in summary fallback)", value: "no" },
+        { name: "Yes (OpenAI-compatible endpoint)", value: "yes" }
+      ]
+    })) === "yes";
+
+  let aiBaseUrl = "https://api.openai.com/v1";
+  let aiModel = "gpt-4o-mini";
+  let aiApiKeyEnv = "OPENAI_API_KEY";
+  if (enableAi) {
+    aiBaseUrl = (
+      await promptImpl.input({
+        message: "AI base URL (OpenAI-compatible)",
+        default: aiBaseUrl
+      })
+    ).trim();
+    aiModel = (
+      await promptImpl.input({
+        message: "AI model",
+        default: aiModel
+      })
+    ).trim();
+    aiApiKeyEnv = (
+      await promptImpl.input({
+        message: "API key env var name",
+        default: aiApiKeyEnv
+      })
+    ).trim();
+  }
+
   return applyInitPlan({
     cwd: options.cwd,
     installTarget: target,
@@ -368,7 +430,13 @@ export async function runInitWizard(options: InitWizardOptions): Promise<InitWiz
     tokenSource,
     repos,
     outputLanguage,
-    timezone
+    timezone,
+    summaryDefaultProfile,
+    ...(summaryGithubLogin ? { summaryGithubLogin } : {}),
+    aiEnabled: enableAi,
+    aiBaseUrl,
+    aiModel,
+    aiApiKeyEnv
   });
 }
 
@@ -399,6 +467,11 @@ export async function runInitPreset(options: InitPresetOptions): Promise<InitWiz
     tokenSource,
     repos: options.repos,
     outputLanguage,
-    timezone
+    timezone,
+    summaryDefaultProfile: "team",
+    aiEnabled: false,
+    aiBaseUrl: "https://api.openai.com/v1",
+    aiModel: "gpt-4o-mini",
+    aiApiKeyEnv: "OPENAI_API_KEY"
   });
 }

@@ -57,6 +57,12 @@ function createPromptAdapter(values: {
   clientId?: string;
   authorizeNow?: "yes" | "no";
   reinstallDecision?: "reinstall" | "cancel";
+  summaryDefaultProfile?: "team" | "cus";
+  enableAiSetup?: "yes" | "no";
+  githubLogin?: string;
+  aiBaseUrl?: string;
+  aiModel?: string;
+  aiApiKeyEnv?: string;
 }): PromptAdapter {
   let inputCount = 0;
   return {
@@ -78,6 +84,12 @@ function createPromptAdapter(values: {
       if (message.includes("Existing RepoDigest installation") || message.includes("Existing RepoDigest install")) {
         return values.reinstallDecision ?? "reinstall";
       }
+      if (message.includes("Default summary profile")) {
+        return values.summaryDefaultProfile ?? "team";
+      }
+      if (message.includes("Enable optional AI summarizer")) {
+        return values.enableAiSetup ?? "no";
+      }
       return values.lang;
     },
     input: async (options) => {
@@ -89,6 +101,18 @@ function createPromptAdapter(values: {
       }
       if (message.includes("OAuth client id")) {
         return values.clientId ?? "";
+      }
+      if (message.includes("GitHub login for 'my commits' filter")) {
+        return values.githubLogin ?? "";
+      }
+      if (message.includes("AI base URL")) {
+        return values.aiBaseUrl ?? "https://api.openai.com/v1";
+      }
+      if (message.includes("AI model")) {
+        return values.aiModel ?? "gpt-4o-mini";
+      }
+      if (message.includes("API key env var name")) {
+        return values.aiApiKeyEnv ?? "OPENAI_API_KEY";
       }
       return values.timezone;
     }
@@ -160,6 +184,57 @@ describe("runCli", () => {
     expect(env).toMatch("GITHUB_TOKEN=gho_test_token");
     expect(tasks).toMatch("RepoDigest: Today");
     expect(workflow).toMatch("RepoDigest Daily");
+    expect(config).toMatch("defaultProfile: team");
+    expect(config).toMatch("enabled: false");
+  });
+
+  it("captures AI setup values during init wizard", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
+    tempDirs.push(dir);
+    const mockAuthClient: GithubDeviceAuthClientLike = {
+      requestDeviceCode: async () => ({
+        deviceCode: "device-code",
+        userCode: "ABCD-EFGH",
+        verificationUri: "https://github.com/login/device",
+        expiresIn: 120,
+        interval: 0
+      }),
+      pollAccessToken: async () => ({
+        status: "token",
+        accessToken: "gho_test_token"
+      })
+    };
+
+    const prompts = createPromptAdapter({
+      installTarget: "project",
+      components: ["cli"],
+      repos: ["owner/repo-a"],
+      lang: "en",
+      timezone: "UTC",
+      authorizeNow: "yes",
+      summaryDefaultProfile: "cus",
+      enableAiSetup: "yes",
+      githubLogin: "alice",
+      aiBaseUrl: "https://example.ai/v1",
+      aiModel: "gpt-oss-20b",
+      aiApiKeyEnv: "MY_AI_KEY"
+    });
+
+    const { io } = createMockIO();
+    const code = await runCli(["init"], dir, {
+      io,
+      prompts,
+      createGithubDeviceAuthClient: () => mockAuthClient
+    });
+    expect(code).toBe(0);
+
+    const config = await readFile(path.join(dir, ".repodigest.yml"), "utf-8");
+    expect(config).toMatch("defaultProfile: cus");
+    expect(config).toMatch("githubLogin: alice");
+    expect(config).toMatch("enabled: true");
+    expect(config).toMatch("baseUrl: https://example.ai/v1");
+    expect(config).toMatch("model: gpt-oss-20b");
+    expect(config).toMatch("apiKeyEnv: MY_AI_KEY");
   });
 
   it("creates digest files with today command", async () => {
@@ -200,6 +275,195 @@ describe("runCli", () => {
     const latest = await readFile(path.join(dir, "repodigest", "latest.md"), "utf-8");
     expect(latest).toMatch("# RepoDigest");
     expect(latest).toMatch("Implement provider integration");
+  });
+
+  it("creates trending summary files for today's GitHub repos", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
+    tempDirs.push(dir);
+
+    const { io } = createMockIO();
+    const code = await runCli(["trending", "--lang", "zh-TW", "--limit", "2"], dir, {
+      io,
+      fetchGithubTrendingRepos: async () => [
+        {
+          fullName: "owner/repo-one",
+          description: "A fast CLI starter",
+          language: "TypeScript",
+          stars: 120,
+          forks: 10,
+          url: "https://github.com/owner/repo-one",
+          topics: ["cli", "typescript"],
+          createdAt: "2026-02-14T00:00:00Z"
+        },
+        {
+          fullName: "owner/repo-two",
+          description: "Minimal utility toolkit",
+          language: "Go",
+          stars: 90,
+          forks: 8,
+          url: "https://github.com/owner/repo-two",
+          topics: ["tooling"],
+          createdAt: "2026-02-14T00:00:00Z"
+        }
+      ]
+    });
+
+    expect(code).toBe(0);
+    const latest = await readFile(path.join(dir, "repodigest", "latest-trending.md"), "utf-8");
+    expect(latest).toMatch("GitHub 今日 Repo");
+    expect(latest).toMatch("owner/repo-one");
+    expect(latest).toMatch("A fast CLI starter");
+  });
+
+  it("supports trending wizard mode", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
+    tempDirs.push(dir);
+
+    const prompts: PromptAdapter = {
+      checkbox: async () => [],
+      select: async (options) => {
+        const message = typeof options.message === "string" ? options.message : "";
+        if (message.includes("Summary language")) {
+          return "both";
+        }
+        return "en";
+      },
+      input: async (options) => {
+        const message = typeof options.message === "string" ? options.message : "";
+        if (message.includes("How many repos")) {
+          return "1";
+        }
+        return "UTC";
+      }
+    };
+
+    const { io } = createMockIO();
+    const code = await runCli(["trending", "--wizard"], dir, {
+      io,
+      prompts,
+      fetchGithubTrendingRepos: async () => [
+        {
+          fullName: "owner/repo-wizard",
+          description: "Wizard generated summary",
+          language: "TypeScript",
+          stars: 40,
+          forks: 2,
+          url: "https://github.com/owner/repo-wizard",
+          topics: [],
+          createdAt: "2026-02-14T00:00:00Z"
+        }
+      ]
+    });
+
+    expect(code).toBe(0);
+    const latest = await readFile(path.join(dir, "repodigest", "latest-trending.md"), "utf-8");
+    expect(latest).toMatch("GitHub 今日 Repo");
+    expect(latest).toMatch("GitHub Today Repos");
+    expect(latest).toMatch("owner/repo-wizard");
+  });
+
+  it("summarizes today's commits for customer profile", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
+    tempDirs.push(dir);
+    const { writeFile } = await import("node:fs/promises");
+
+    await writeFile(
+      path.join(dir, ".repodigest.yml"),
+      [
+        "timezone: UTC",
+        "scope:",
+        "  repos:",
+        "    - owner/repo",
+        "summaries:",
+        "  defaultProfile: team",
+        "  profiles:",
+        "    team:",
+        "      audience: team",
+        "      style: professional",
+        "      includeTechnicalDetails: true",
+        "      language: en",
+        "    cus:",
+        "      audience: customer",
+        "      style: natural",
+        "      includeTechnicalDetails: false",
+        "      language: zh-TW"
+      ].join("\n") + "\n",
+      "utf-8"
+    );
+
+    process.env.GITHUB_TOKEN = "ghp_token";
+    const { io, logs } = createMockIO();
+    const code = await runCli(["sum", "cus", "--dry-run"], dir, {
+      io,
+      createGithubProvider: () => ({
+        fetchEvents: async () => [
+          {
+            id: "commit:1",
+            provider: "github",
+            repo: "owner/repo",
+            type: "commit",
+            title: "feat: add shared dashboard widget",
+            url: "https://github.com/owner/repo/commit/1",
+            timestamp: "2026-02-14T09:00:00Z",
+            author: "alice"
+          }
+        ]
+      })
+    });
+
+    expect(code).toBe(0);
+    expect(logs.join("\n")).toMatch("今日 Commit 摘要");
+    expect(logs.join("\n")).toMatch("新增功能:");
+  });
+
+  it("supports custom summary profile from config", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
+    tempDirs.push(dir);
+    const { writeFile } = await import("node:fs/promises");
+
+    await writeFile(
+      path.join(dir, ".repodigest.yml"),
+      [
+        "timezone: UTC",
+        "scope:",
+        "  repos:",
+        "    - owner/repo",
+        "summaries:",
+        "  defaultProfile: team",
+        "  profiles:",
+        "    boss:",
+        "      audience: executive",
+        "      style: professional",
+        "      includeTechnicalDetails: true",
+        "      language: en"
+      ].join("\n") + "\n",
+      "utf-8"
+    );
+
+    process.env.GITHUB_TOKEN = "ghp_token";
+    const { io } = createMockIO();
+    const code = await runCli(["sum", "boss"], dir, {
+      io,
+      createGithubProvider: () => ({
+        fetchEvents: async () => [
+          {
+            id: "commit:2",
+            provider: "github",
+            repo: "owner/repo",
+            type: "commit",
+            title: "fix: stabilize export pipeline",
+            url: "https://github.com/owner/repo/commit/2",
+            timestamp: "2026-02-14T10:00:00Z",
+            author: "alice"
+          }
+        ]
+      })
+    });
+
+    expect(code).toBe(0);
+    const latest = await readFile(path.join(dir, "repodigest", "latest-sum-boss.md"), "utf-8");
+    expect(latest).toMatch("Today's Commit Summary");
+    expect(latest).toMatch("stabilize export pipeline");
   });
 
   it("supports one-line project init in non-interactive mode", async () => {

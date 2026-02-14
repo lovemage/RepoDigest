@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { checkbox as promptCheckbox, select as promptSelect } from "@inquirer/prompts";
+import { checkbox as promptCheckbox, input as promptInput, select as promptSelect } from "@inquirer/prompts";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { runPipeline, type Event, type WorkItem } from "@oceanads/core";
@@ -22,7 +22,7 @@ import {
 import { loadSummarizerPlugin } from "./summarizer-plugin.js";
 import { writeDigestFiles, writeRangeDigestFiles } from "./writer.js";
 
-type CliCommand = "today" | "range" | "validate" | "init" | "update" | "remove" | "auth" | "help";
+type CliCommand = "today" | "range" | "validate" | "init" | "update" | "remove" | "auth" | "trending" | "sum" | "help";
 type TimeBoundary = "start" | "end";
 type RenderTarget = "internal" | "x" | "threads" | "markdown";
 type PublicTone = "calm" | "playful" | "hacker" | "formal";
@@ -42,6 +42,7 @@ export interface CliRuntimeOptions {
   createGithubProvider?: (token: string) => GithubProviderLike;
   createGithubDeviceAuthClient?: () => GithubDeviceAuthClientLike;
   listGithubRepos?: (token: string) => Promise<string[]>;
+  fetchGithubTrendingRepos?: (options: TrendingFetchOptions) => Promise<TrendingRepo[]>;
 }
 
 interface ParsedCommand {
@@ -99,6 +100,45 @@ interface AuthArgs {
   noBrowser: boolean;
 }
 
+interface TrendingArgs {
+  language: OutputLanguage;
+  limit: number;
+  wizard: boolean;
+}
+
+interface TrendingRepo {
+  fullName: string;
+  description: string;
+  language?: string;
+  stars: number;
+  forks: number;
+  url: string;
+  topics: string[];
+  createdAt: string;
+}
+
+interface TrendingFetchOptions {
+  day: string;
+  limit: number;
+  token?: string;
+}
+
+type SummaryStyle = "professional" | "natural";
+
+interface SumArgs {
+  profile?: string;
+  language?: OutputLanguage;
+  dryRun: boolean;
+  useAi: boolean;
+}
+
+interface SummaryProfile {
+  audience: string;
+  style: SummaryStyle;
+  includeTechnicalDetails: boolean;
+  language: OutputLanguage;
+}
+
 interface ResolvedTimeWindow {
   since: Date;
   until: Date;
@@ -133,7 +173,9 @@ function parseCommand(argv: string[]): ParsedCommand {
     command === "init" ||
     command === "update" ||
     command === "remove" ||
-    command === "auth"
+    command === "auth" ||
+    command === "trending" ||
+    command === "sum"
   ) {
     return { command, args };
   }
@@ -594,6 +636,113 @@ function parseAuthArgs(args: string[]): AuthArgs {
   return result;
 }
 
+function parseTrendingArgs(args: string[]): TrendingArgs {
+  const result: TrendingArgs = {
+    language: "en",
+    limit: 10,
+    wizard: false
+  };
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (!arg) {
+      continue;
+    }
+
+    if (arg === "--lang") {
+      const value = args[i + 1];
+      if (!value) {
+        throw new Error("Missing value for --lang");
+      }
+      if (value !== "en" && value !== "zh-TW" && value !== "both") {
+        throw new Error(`Invalid --lang value: ${value}`);
+      }
+      result.language = value;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--limit") {
+      const value = args[i + 1];
+      if (!value) {
+        throw new Error("Missing value for --limit");
+      }
+      const parsedLimit = Number(value);
+      if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 30) {
+        throw new Error("Invalid --limit value. Expected an integer between 1 and 30.");
+      }
+      result.limit = parsedLimit;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--wizard") {
+      result.wizard = true;
+      continue;
+    }
+
+    throw new Error(`Unknown option: ${arg}`);
+  }
+
+  return result;
+}
+
+function parseSumArgs(args: string[]): SumArgs {
+  const result: SumArgs = {
+    dryRun: false,
+    useAi: false
+  };
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (!arg) {
+      continue;
+    }
+
+    if (!arg.startsWith("--") && !result.profile) {
+      result.profile = arg;
+      continue;
+    }
+
+    if (arg === "--profile") {
+      const value = args[i + 1];
+      if (!value) {
+        throw new Error("Missing value for --profile");
+      }
+      result.profile = value;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--lang") {
+      const value = args[i + 1];
+      if (!value) {
+        throw new Error("Missing value for --lang");
+      }
+      if (value !== "en" && value !== "zh-TW" && value !== "both") {
+        throw new Error(`Invalid --lang value: ${value}`);
+      }
+      result.language = value;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--dry-run") {
+      result.dryRun = true;
+      continue;
+    }
+
+    if (arg === "--ai") {
+      result.useAi = true;
+      continue;
+    }
+
+    throw new Error(`Unknown option: ${arg}`);
+  }
+
+  return result;
+}
+
 function startOfDay(input: Date): Date {
   return new Date(input.getFullYear(), input.getMonth(), input.getDate(), 0, 0, 0, 0);
 }
@@ -855,6 +1004,268 @@ async function fetchGithubRepos(token: string): Promise<string[]> {
   return Array.from(new Set(repos));
 }
 
+function toUtcDayLabel(input: Date): string {
+  return input.toISOString().slice(0, 10);
+}
+
+function formatTrendingRepo(repo: TrendingRepo, language: "en" | "zh-TW"): string {
+  const langLabel = repo.language ?? (language === "zh-TW" ? "未知" : "unknown");
+  const topicText = repo.topics.length > 0 ? repo.topics.slice(0, 3).join(", ") : language === "zh-TW" ? "無" : "none";
+  const createdDate = repo.createdAt.slice(0, 10);
+
+  if (language === "zh-TW") {
+    return [
+      `### ${repo.fullName}`,
+      `- 摘要: ${repo.description || "無描述"}`,
+      `- 指標: ⭐ ${repo.stars} | 🍴 ${repo.forks} | 語言 ${langLabel}`,
+      `- 主題: ${topicText}`,
+      `- 建立日: ${createdDate}`,
+      `- 連結: ${repo.url}`
+    ].join("\n");
+  }
+
+  return [
+    `### ${repo.fullName}`,
+    `- Summary: ${repo.description || "No description"}`,
+    `- Metrics: ⭐ ${repo.stars} | 🍴 ${repo.forks} | Language ${langLabel}`,
+    `- Topics: ${topicText}`,
+    `- Created: ${createdDate}`,
+    `- URL: ${repo.url}`
+  ].join("\n");
+}
+
+function renderTrendingSummary(repos: TrendingRepo[], day: string, language: OutputLanguage): string {
+  const headerEn = `# GitHub Today Repos (${day})\n\nTop ${repos.length} repositories created today and ranked by stars.`;
+  const headerZh = `# GitHub 今日 Repo (${day})\n\n依照星數排序的今日新建 repository（前 ${repos.length} 名）。`;
+
+  if (language === "both") {
+    const zhBlock = repos.map((repo) => formatTrendingRepo(repo, "zh-TW")).join("\n\n");
+    const enBlock = repos.map((repo) => formatTrendingRepo(repo, "en")).join("\n\n");
+    return [headerZh, "", zhBlock, "", "---", "", headerEn, "", enBlock, ""].join("\n");
+  }
+
+  if (language === "zh-TW") {
+    return [headerZh, "", repos.map((repo) => formatTrendingRepo(repo, "zh-TW")).join("\n\n"), ""].join("\n");
+  }
+
+  return [headerEn, "", repos.map((repo) => formatTrendingRepo(repo, "en")).join("\n\n"), ""].join("\n");
+}
+
+interface GithubSearchRepoItem {
+  full_name?: string;
+  description?: string | null;
+  language?: string | null;
+  stargazers_count?: number;
+  forks_count?: number;
+  html_url?: string;
+  topics?: string[];
+  created_at?: string;
+}
+
+interface GithubSearchRepoResponse {
+  items?: GithubSearchRepoItem[];
+}
+
+async function fetchGithubTrendingRepos(options: TrendingFetchOptions): Promise<TrendingRepo[]> {
+  const q = encodeURIComponent(`created:>=${options.day}`);
+  const response = await fetch(
+    `https://api.github.com/search/repositories?q=${q}&sort=stars&order=desc&per_page=${options.limit}`,
+    {
+      headers: {
+        Accept: "application/vnd.github+json",
+        ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+        "User-Agent": "repodigest/0.1.1"
+      }
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error("GitHub API rate limit reached. Set GITHUB_TOKEN to increase limits.");
+    }
+    throw new Error(`Unable to fetch trending repositories from GitHub (HTTP ${response.status}).`);
+  }
+
+  const data = (await response.json()) as GithubSearchRepoResponse;
+  const items = Array.isArray(data.items) ? data.items : [];
+
+  return items
+    .filter((item) => typeof item.full_name === "string" && typeof item.html_url === "string")
+    .map((item) => ({
+      fullName: item.full_name ?? "",
+      description: item.description ?? "",
+      ...(item.language ? { language: item.language } : {}),
+      stars: typeof item.stargazers_count === "number" ? item.stargazers_count : 0,
+      forks: typeof item.forks_count === "number" ? item.forks_count : 0,
+      url: item.html_url ?? "",
+      topics: Array.isArray(item.topics) ? item.topics : [],
+      createdAt: item.created_at ?? `${options.day}T00:00:00Z`
+    }));
+}
+
+function buildFallbackProfile(name: string): SummaryProfile {
+  if (name === "cus") {
+    return {
+      audience: "customer",
+      style: "natural",
+      includeTechnicalDetails: false,
+      language: "zh-TW"
+    };
+  }
+  if (name === "team") {
+    return {
+      audience: "team",
+      style: "professional",
+      includeTechnicalDetails: true,
+      language: "en"
+    };
+  }
+  return {
+    audience: name,
+    style: "professional",
+    includeTechnicalDetails: true,
+    language: "en"
+  };
+}
+
+function resolveSummaryProfile(config: RepoDigestConfig, profileName?: string): { name: string; profile: SummaryProfile } {
+  const selected = profileName?.trim() || config.summaries.defaultProfile || "team";
+  const profile = config.summaries.profiles[selected] ?? buildFallbackProfile(selected);
+  return {
+    name: selected,
+    profile: {
+      audience: profile.audience,
+      style: profile.style,
+      includeTechnicalDetails: profile.includeTechnicalDetails,
+      language: profile.language
+    }
+  };
+}
+
+function sanitizeProfileName(profileName: string): string {
+  return profileName.replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase();
+}
+
+function languageHeader(language: "en" | "zh-TW", profileName: string, audience: string, day: string): string {
+  if (language === "zh-TW") {
+    return `# 今日 Commit 摘要 (${day})\n\n- 受眾: ${audience}\n- 檔案配置: ${profileName}`;
+  }
+  return `# Today's Commit Summary (${day})\n\n- Audience: ${audience}\n- Profile: ${profileName}`;
+}
+
+function buildSummaryLines(
+  events: Event[],
+  profile: SummaryProfile,
+  language: "en" | "zh-TW",
+  githubLogin?: string
+): string[] {
+  const filteredByAuthor = githubLogin
+    ? events.filter((event) => event.author?.toLowerCase() === githubLogin.toLowerCase())
+    : events;
+  const source = filteredByAuthor.length > 0 ? filteredByAuthor : events;
+
+  const byRepo = new Map<string, Event[]>();
+  for (const event of source) {
+    const repo = event.repo ?? (language === "zh-TW" ? "未知 repo" : "unknown-repo");
+    const list = byRepo.get(repo) ?? [];
+    list.push(event);
+    byRepo.set(repo, list);
+  }
+
+  const lines: string[] = [];
+  for (const [repo, repoEvents] of byRepo.entries()) {
+    lines.push(language === "zh-TW" ? `## ${repo}（${repoEvents.length} commits）` : `## ${repo} (${repoEvents.length} commits)`);
+    for (const event of repoEvents.slice(0, 12)) {
+      const raw = event.title ?? "(commit)";
+      if (profile.includeTechnicalDetails) {
+        lines.push(`- ${raw}${event.url ? ` (${event.url})` : ""}`);
+      } else {
+        const simplified = raw
+          .replace(/^feat\s*:\s*/i, language === "zh-TW" ? "新增功能: " : "Added feature: ")
+          .replace(/^fix\s*:\s*/i, language === "zh-TW" ? "修正問題: " : "Fixed issue: ")
+          .replace(/^refactor\s*:\s*/i, language === "zh-TW" ? "調整內容: " : "Improved: ")
+          .replace(/^docs\s*:\s*/i, language === "zh-TW" ? "文件更新: " : "Documentation: ");
+        lines.push(`- ${simplified}`);
+      }
+    }
+  }
+
+  if (lines.length === 0) {
+    lines.push(language === "zh-TW" ? "- 今天沒有可摘要的 commit。" : "- No commits found for today.");
+  }
+
+  if (profile.style === "professional") {
+    lines.push(
+      language === "zh-TW"
+        ? "\n> 本摘要供主管與團隊同步，聚焦可追蹤的開發進展。"
+        : "\n> This summary is intended for leadership/team status alignment and traceable engineering progress."
+    );
+  } else {
+    lines.push(
+      language === "zh-TW"
+        ? "\n> 本摘要已轉為較自然敘述，方便客戶快速掌握今日進度。"
+        : "\n> This summary is simplified in natural language for customer-facing updates."
+    );
+  }
+
+  return lines;
+}
+
+async function tryGenerateAiSummary(params: {
+  content: string;
+  profileName: string;
+  profile: SummaryProfile;
+  language: OutputLanguage;
+  config: RepoDigestConfig;
+  cwd: string;
+}): Promise<string | null> {
+  const ai = params.config.summaries.ai;
+  if (!ai.enabled) {
+    return null;
+  }
+
+  const envFile = await loadDotEnv(params.cwd);
+  const apiKey = process.env[ai.apiKeyEnv] ?? envFile[ai.apiKeyEnv];
+  if (!apiKey) {
+    return null;
+  }
+
+  const targetLanguage = params.language === "both" ? "Traditional Chinese and English" : params.language;
+  const systemPrompt = [
+    "You are a software delivery summarizer.",
+    `Audience profile: ${params.profileName} (${params.profile.audience}).`,
+    `Writing style: ${params.profile.style}.`,
+    `Technical detail level: ${params.profile.includeTechnicalDetails ? "high" : "low"}.`,
+    `Output language: ${targetLanguage}.`
+  ].join(" ");
+
+  const response = await fetch(`${ai.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: ai.model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Summarize the following commit digest:\n\n${params.content}` }
+      ],
+      temperature: 0.2
+    })
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const text = data.choices?.[0]?.message?.content?.trim();
+  return text && text.length > 0 ? text : null;
+}
+
 async function ensureReposConfigured(
   installRoot: string,
   io: CliIO,
@@ -892,7 +1303,7 @@ async function ensureReposConfigured(
     choices: repoList.slice(0, 50).map((repo, index) => ({
       name: repo,
       value: repo,
-      checked: index < 3
+      checked: index < 1
     }))
   });
 
@@ -1438,6 +1849,170 @@ async function runAuth(
   }
 }
 
+async function runTrending(
+  cwd: string,
+  io: CliIO,
+  args: string[],
+  runtimeOptions: CliRuntimeOptions
+): Promise<number> {
+  try {
+    const parsed = parseTrendingArgs(args);
+    let language = parsed.language;
+    let limit = parsed.limit;
+
+    if (parsed.wizard) {
+      if (!runtimeOptions.prompts && !process.stdin.isTTY) {
+        throw new Error("No interactive terminal for wizard mode.");
+      }
+
+      const askSelect =
+        runtimeOptions.prompts?.select ??
+        ((options: { message: string; choices: Array<{ name: string; value: string }> }) => promptSelect(options));
+      const askInput =
+        runtimeOptions.prompts?.input ??
+        ((options: { message: string; default?: string }) => promptInput(options));
+
+      language = (await askSelect({
+        message: "Summary language",
+        choices: [
+          { name: "English", value: "en" },
+          { name: "zh-TW", value: "zh-TW" },
+          { name: "Both", value: "both" }
+        ]
+      })) as OutputLanguage;
+
+      const limitRaw = (await askInput({ message: "How many repos (1-30)?", default: String(limit) })).trim();
+      const parsedLimit = Number(limitRaw);
+      if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 30) {
+        throw new Error("Invalid limit in wizard mode. Expected an integer between 1 and 30.");
+      }
+      limit = parsedLimit;
+    }
+
+    const day = toUtcDayLabel(new Date());
+    const envFile = await loadDotEnv(cwd);
+    const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? envFile.GITHUB_TOKEN ?? envFile.GH_TOKEN;
+
+    const repos = runtimeOptions.fetchGithubTrendingRepos
+      ? await runtimeOptions.fetchGithubTrendingRepos({ day, limit, ...(token ? { token } : {}) })
+      : await fetchGithubTrendingRepos({ day, limit, ...(token ? { token } : {}) });
+
+    if (repos.length === 0) {
+      io.error("No repositories found for today.");
+      return 1;
+    }
+
+    const content = renderTrendingSummary(repos, day, language);
+    const outputRoot = path.join(cwd, "repodigest", "trending");
+    const dailyFile = path.join(outputRoot, `${day}.md`);
+    const latestFile = path.join(cwd, "repodigest", "latest-trending.md");
+
+    await mkdir(outputRoot, { recursive: true });
+    await writeFile(dailyFile, content, "utf-8");
+    await writeFile(latestFile, content, "utf-8");
+
+    io.log(`Created ${dailyFile}`);
+    io.log(`Updated ${latestFile}`);
+    io.log(`Fetched ${repos.length} repos (day=${day}, lang=${language}).`);
+    return 0;
+  } catch (error: unknown) {
+    io.error("Trending fetch failed.");
+    io.error(formatConfigError(error));
+    return 1;
+  }
+}
+
+async function runSum(cwd: string, io: CliIO, args: string[], runtimeOptions: CliRuntimeOptions): Promise<number> {
+  try {
+    const config = await loadValidatedConfig(cwd, io);
+    if (!config) {
+      return 1;
+    }
+
+    const parsed = parseSumArgs(args);
+    const { name: profileName, profile } = resolveSummaryProfile(config, parsed.profile);
+    const selectedLanguage = parsed.language ?? profile.language;
+
+    const now = new Date();
+    const timeWindow = resolveTimeWindow(
+      { dryRun: false, preview: false, since: "today", until: "now" },
+      { since: "today", until: "now" },
+      now
+    );
+
+    const token = await loadToken(cwd, config.providers.github.tokenEnv);
+    if (!token) {
+      throw new Error(`Missing GitHub token. Set ${config.providers.github.tokenEnv} in environment or .env`);
+    }
+
+    const provider = runtimeOptions.createGithubProvider?.(token) ?? new GithubProviderClient({ token });
+    const fetchOptions: GithubFetchOptions = {
+      repos: config.scope.repos,
+      since: timeWindow.sinceIso,
+      until: timeWindow.untilIso
+    };
+
+    const query = config.providers.github.query;
+    if (query?.assignee) {
+      fetchOptions.assignee = query.assignee;
+    }
+    if (query?.labelsAny) {
+      fetchOptions.labelsAny = query.labelsAny;
+    }
+
+    const events = await provider.fetchEvents(fetchOptions);
+    const commitEvents = events.filter((event) => event.type === "commit");
+    const day = toUtcDayLabel(now);
+
+    const makeText = (lang: "en" | "zh-TW"): string => {
+      const header = languageHeader(lang, profileName, profile.audience, day);
+      const lines = buildSummaryLines(commitEvents, profile, lang, config.summaries.identity.githubLogin);
+      return [header, "", ...lines, ""].join("\n");
+    };
+
+    const fallbackContent =
+      selectedLanguage === "both" ? `${makeText("zh-TW")}\n---\n\n${makeText("en")}` : makeText(selectedLanguage);
+
+    let content = fallbackContent;
+    const aiEnabled = parsed.useAi || config.summaries.ai.enabled;
+    if (aiEnabled) {
+      const aiContent = await tryGenerateAiSummary({
+        content: fallbackContent,
+        profileName,
+        profile,
+        language: selectedLanguage,
+        config,
+        cwd
+      });
+      if (aiContent) {
+        content = aiContent;
+      }
+    }
+
+    if (parsed.dryRun) {
+      io.log(content);
+      return 0;
+    }
+
+    const safeProfile = sanitizeProfileName(profileName);
+    const outputRoot = path.join(cwd, "repodigest", "sum", safeProfile);
+    const dailyFile = path.join(outputRoot, `${day}.md`);
+    const latestFile = path.join(cwd, "repodigest", `latest-sum-${safeProfile}.md`);
+    await mkdir(outputRoot, { recursive: true });
+    await writeFile(dailyFile, content, "utf-8");
+    await writeFile(latestFile, content, "utf-8");
+
+    io.log(`Created ${dailyFile}`);
+    io.log(`Updated ${latestFile}`);
+    io.log(`Summarized ${commitEvents.length} commits using profile '${profileName}' (lang=${selectedLanguage}).`);
+    return 0;
+  } catch (error: unknown) {
+    io.error("Summary failed.");
+    io.error(formatConfigError(error));
+    return 1;
+  }
+}
+
 function resolveTargetRoot(cwd: string, target?: InstallTarget): { target: InstallTarget; root: string } {
   const resolvedTarget = target ?? "project";
   return {
@@ -1575,7 +2150,7 @@ async function runRemove(cwd: string, io: CliIO, args: string[]): Promise<number
 
 function printHelp(io: CliIO): void {
   io.log("RepoDigest CLI");
-  io.log("Usage: repodigest <today|range|validate|init|update|remove|auth>");
+  io.log("Usage: repodigest <today|range|trending|sum|validate|init|update|remove|auth>");
   io.log("Commands:");
   io.log("  init      interactive or one-line setup");
   io.log("  update    update existing .repodigest.yml values");
@@ -1584,6 +2159,8 @@ function printHelp(io: CliIO): void {
   io.log("  validate  validate .repodigest.yml and token availability");
   io.log("  today     fetch last 24h GitHub activity and generate daily digest");
   io.log("  range     fetch GitHub activity in a custom time window");
+  io.log("  trending  fetch today's GitHub repositories and generate summary");
+  io.log("  sum       summarize today's commits for customer/team/custom audience");
   io.log("Window options:");
   io.log("  --dry-run           print digest to stdout without writing files");
   io.log("  --preview           preview rendered posts/blocks without writing files");
@@ -1592,6 +2169,16 @@ function printHelp(io: CliIO): void {
   io.log("  --target <value>    internal|x|threads|markdown");
   io.log("  --tone <value>      calm|playful|hacker|formal");
   io.log("  --lang <value>      en|zh-TW|both");
+  io.log("Trending options:");
+  io.log("  --lang <value>      en|zh-TW|both");
+  io.log("  --limit <number>    1..30, default 10");
+  io.log("  --wizard            interactive language + limit prompts");
+  io.log("Sum options:");
+  io.log("  sum <profile>       profile key, e.g. cus|team|myboss");
+  io.log("  --profile <value>   profile key from config.summaries.profiles");
+  io.log("  --lang <value>      en|zh-TW|both (override profile language)");
+  io.log("  --dry-run           print summary only");
+  io.log("  --ai                force AI summarization if API key is available");
   io.log("Init options:");
   io.log("  --project           install to current project");
   io.log("  --agentrule         install to global agentrule location");
@@ -1651,6 +2238,10 @@ export async function runCli(
       return runRemove(cwd, io, parsed.args);
     case "auth":
       return runAuth(cwd, io, parsed.args, runtimeOptions);
+    case "trending":
+      return runTrending(cwd, io, parsed.args, runtimeOptions);
+    case "sum":
+      return runSum(cwd, io, parsed.args, runtimeOptions);
     default:
       printHelp(io);
       return 0;

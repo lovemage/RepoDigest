@@ -7,6 +7,9 @@ describe("config", () => {
     expect(config.timezone).toBe("UTC");
     expect(config.output.target).toBe("internal");
     expect(config.providers.github.tokenEnv).toBe("GITHUB_TOKEN");
+    expect(config.summaries.defaultProfile).toBe("team");
+    expect(config.summaries.profiles.team.style).toBe("professional");
+    expect(config.summaries.profiles.cus.style).toBe("natural");
   });
 
   it("rejects invalid repo format", () => {
@@ -19,4 +22,3 @@ scope:
     ).toThrowError(/Repo format must be owner\/name/);
   });
 });
-

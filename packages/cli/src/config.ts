@@ -31,6 +31,46 @@ const outputSchema = z
   })
   .default({});
 
+const summaryProfileSchema = z.object({
+  audience: z.string().min(1).default("team"),
+  style: z.enum(["professional", "natural"]).default("professional"),
+  includeTechnicalDetails: z.boolean().default(true),
+  language: z.enum(["zh-TW", "en", "both"]).default("en")
+});
+
+const summariesSchema = z
+  .object({
+    defaultProfile: z.string().min(1).default("team"),
+    profiles: z.record(summaryProfileSchema).default({
+      team: {
+        audience: "team",
+        style: "professional",
+        includeTechnicalDetails: true,
+        language: "en"
+      },
+      cus: {
+        audience: "customer",
+        style: "natural",
+        includeTechnicalDetails: false,
+        language: "zh-TW"
+      }
+    }),
+    identity: z
+      .object({
+        githubLogin: z.string().min(1).optional()
+      })
+      .default({}),
+    ai: z
+      .object({
+        enabled: z.boolean().default(false),
+        baseUrl: z.string().url().default("https://api.openai.com/v1"),
+        model: z.string().min(1).default("gpt-4o-mini"),
+        apiKeyEnv: z.string().min(1).default("OPENAI_API_KEY")
+      })
+      .default({})
+  })
+  .default({});
+
 export const repoDigestConfigSchema = z.object({
   timezone: z.string().min(1).default("UTC"),
   scope: z
@@ -53,7 +93,8 @@ export const repoDigestConfigSchema = z.object({
         .default({})
     })
     .default({}),
-  output: outputSchema
+  output: outputSchema,
+  summaries: summariesSchema
 });
 
 export type RepoDigestConfig = z.infer<typeof repoDigestConfigSchema>;

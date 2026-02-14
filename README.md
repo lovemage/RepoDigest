@@ -27,18 +27,25 @@ It can render:
 - GitHub account
 - Optional: GitHub CLI `gh` (recommended for browser auth)
 
-## 3-Minute Setup
+## One-Line Setup
+
+```bash
+npx repodigest@latest init --quick --project
+```
+
+No `npm install` and no local build required for first-time use.
+
+For contributors developing this repo locally:
 
 ```bash
 npm install
 npm run build
-npx repodigest init --quick --project
 ```
 
 That one `init --quick` command does:
 1. create config
 2. run browser auth (via GitHub CLI `gh` if available)
-3. let you pick repos from CLI (if `--repo` is not provided)
+3. let you pick repos from CLI (if `--repo` is not provided; default preselects one repo)
 4. validate setup
 
 Optional (skip selection prompt):
@@ -79,7 +86,30 @@ npx repodigest today --dry-run
 
 # weekly window
 npx repodigest range --since monday --until today
+
+# discover today's new GitHub repos with summary
+npx repodigest trending --wizard
+
+# non-interactive
+npx repodigest trending --lang en --limit 10
+
+# summarize today's commits for customer
+npx repodigest sum cus
+
+# summarize today's commits for team/leadership
+npx repodigest sum team
+
+# custom profile from config.summaries.profiles
+npx repodigest sum myboss
+
+# or pass any configured profile key
+npx repodigest sum <profile>
 ```
+
+`init` wizard now includes optional AI setup for `sum` command:
+- choose default summary profile (`team` or `cus`)
+- optional GitHub login for "my commits" filter
+- optional OpenAI-compatible endpoint (`baseUrl`, `model`, `apiKeyEnv`)
 
 ## Output Files
 
