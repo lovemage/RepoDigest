@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "repodigest": "./dist/bin.js"
+    "repodigest": "dist/bin.js"
   },
   "publishConfig": {
     "access": "public"

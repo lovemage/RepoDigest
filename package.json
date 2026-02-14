@@ -21,7 +21,9 @@
     "kpi:explainability": "node scripts/kpi/explainability-session.mjs",
     "test:watch": "vitest",
     "release:publish": "node scripts/release/publish-workspaces.mjs",
-    "release:publish:dry": "node scripts/release/publish-workspaces.mjs --dry-run --skip-checks"
+    "release:publish:dry": "node scripts/release/publish-workspaces.mjs --dry-run --skip-checks",
+    "release:publish:noauth": "node scripts/release/publish-workspaces.mjs --skip-auth-check",
+    "release:publish:publish-only": "node scripts/release/publish-workspaces.mjs --skip-auth-check --skip-checks"
   },
   "devDependencies": {
     "@types/node": "^22.13.4",

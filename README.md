@@ -21,6 +21,12 @@ It can render:
 - Traditional Chinese (technical): `README.zh-TW.md`
 - Traditional Chinese (plain language): `README.marketing.zh-TW.md`
 
+## Prerequisites
+
+- Node.js `>=22`
+- GitHub account
+- Optional: GitHub CLI `gh` (recommended for browser auth)
+
 ## 3-Minute Setup
 
 ```bash
@@ -94,41 +100,11 @@ npx repodigest remove --yes
 npx repodigest validate
 ```
 
-## Publish To npm (for `npx repodigest`)
-
-1. Create npm account: https://www.npmjs.com/signup
-2. Verify email and enable 2FA in npm account settings.
-3. Login locally:
-```bash
-npm login
-```
-4. Publish workspace packages in order:
-```bash
-npm run build
-npm publish --workspace packages/core --access public
-npm publish --workspace packages/provider-github --access public
-npm publish --workspace packages/provider-git --access public
-npm publish --workspace packages/renderer-internal --access public
-npm publish --workspace packages/renderer-threads --access public
-npm publish --workspace packages/renderer-x --access public
-npm publish --workspace packages/cli --access public
-```
-Or one command:
-```bash
-npm run release:publish
-```
-Note: current internal dependencies use `@oceanads/*`. You must own that npm scope (or rename scopes before publishing).
-5. Verify:
-```bash
-npx -y repodigest --help
-```
-
 ## Docs
 
 - Config: `docs/CONFIG.md`
 - Plugins: `docs/PLUGINS.md`
 - KPI: `docs/KPI.md`
-- npm publish guide (zh-TW): `docs/NPM_PUBLISH.zh-TW.md`
 
 ## License
 
