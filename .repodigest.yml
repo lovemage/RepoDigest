@@ -1,0 +1,17 @@
+timezone: Asia/Taipei
+scope:
+  repos:
+    - lovemage/RepoDigest
+providers:
+  github:
+    tokenEnv: GITHUB_TOKEN
+output:
+  mode: internal
+  target: internal
+  lang: zh-TW
+  tone: calm
+  length: short
+  include:
+    stack: false
+    links: true
+    metrics: true
