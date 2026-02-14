@@ -116,10 +116,9 @@ npx repodigest init --agentrule --yes --repo owner/repo
 - `--repo <owner/repo>`: repeatable, required in non-interactive mode.
 - `--lang <en|zh-TW|both>`
 - `--timezone <IANA timezone>`
-- `--token-source <env|input|browser>`
-- `--token <value>`: required when `--token-source input` is used with `--yes`.
-- `--client-id <id>`: GitHub OAuth client id for `--token-source browser`.
-- `--scope <value>`: OAuth scopes for `--token-source browser` (default `repo`).
+- `--token-source <browser>`: browser auth only.
+- `--client-id <id>`: GitHub OAuth client id for browser auth.
+- `--scope <value>`: OAuth scopes for browser auth (default `repo`).
 - `--no-browser`: do not auto-open browser; print URL/code only.
 - `--components <cli|ide|action|all>`: only for project target.
 

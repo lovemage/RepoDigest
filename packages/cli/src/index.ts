@@ -67,7 +67,6 @@ interface InitArgs {
   language?: OutputLanguage;
   timezone?: string;
   tokenSource?: TokenSource;
-  token?: string;
   components?: Component[];
   clientId?: string;
   authScope?: string;
@@ -301,7 +300,7 @@ function parseInitArgs(args: string[]): InitArgs {
       if (!value) {
         throw new Error("Missing value for --token-source");
       }
-      if (value !== "env" && value !== "input" && value !== "browser") {
+      if (value !== "browser") {
         throw new Error(`Invalid --token-source value: ${value}`);
       }
       result.tokenSource = value;
@@ -310,13 +309,7 @@ function parseInitArgs(args: string[]): InitArgs {
     }
 
     if (arg === "--token") {
-      const value = args[i + 1];
-      if (!value) {
-        throw new Error("Missing value for --token");
-      }
-      result.token = value;
-      i += 1;
-      continue;
+      throw new Error("--token is no longer supported. Use browser auth only.");
     }
 
     if (arg === "--client-id") {
@@ -1080,6 +1073,17 @@ async function runInit(
 ): Promise<number> {
   try {
     const parsed = parseInitArgs(args);
+    if (
+      (parsed.yes || parsed.quick) &&
+      (parsed.tokenSource ?? "browser") === "browser" &&
+      !parsed.clientId &&
+      !process.env.REPODIGEST_GITHUB_CLIENT_ID
+    ) {
+      throw new Error(
+        "Missing GitHub OAuth client id. Use --client-id or set REPODIGEST_GITHUB_CLIENT_ID."
+      );
+    }
+
     const resolveClientId = async (): Promise<string | undefined> => {
       const configured = parsed.clientId ?? process.env.REPODIGEST_GITHUB_CLIENT_ID;
       if (configured) {
@@ -1155,7 +1159,6 @@ async function runInit(
         tokenSource,
         ...(parsed.language ? { outputLanguage: parsed.language } : {}),
         ...(parsed.timezone ? { timezone: parsed.timezone } : {}),
-        ...(parsed.token ? { token: parsed.token } : {}),
         ...(parsed.components ? { components: parsed.components } : {})
       });
 
@@ -1188,7 +1191,6 @@ async function runInit(
         ...(parsed.language ? { outputLanguage: parsed.language } : {}),
         ...(parsed.timezone ? { timezone: parsed.timezone } : {}),
         ...(parsed.tokenSource ? { tokenSource: parsed.tokenSource } : {}),
-        ...(parsed.token ? { token: parsed.token } : {}),
         ...(parsed.components ? { components: parsed.components } : {})
       });
 
@@ -1455,14 +1457,13 @@ function printHelp(io: CliIO): void {
   io.log("  --project           install to current project");
   io.log("  --agentrule         install to global agentrule location");
   io.log("  --yes               non-interactive mode");
-  io.log("  --quick             one-command setup (init + optional browser auth + validate)");
+  io.log("  --quick             one-command setup (init + browser auth + validate)");
   io.log("  --repo <owner/repo> repeatable");
   io.log("  --lang <en|zh-TW|both>");
   io.log("  --timezone <IANA timezone>");
-  io.log("  --token-source <env|input|browser>");
-  io.log("  --token <value>     required when --token-source input in --yes mode");
-  io.log("  --client-id <id>    GitHub OAuth client id for --token-source browser");
-  io.log("  --scope <value>     OAuth scope for --token-source browser (default: repo)");
+  io.log("  --token-source <browser>  browser auth only");
+  io.log("  --client-id <id>    GitHub OAuth client id for browser auth");
+  io.log("  --scope <value>     OAuth scope for browser auth (default: repo)");
   io.log("  --no-browser        print auth URL only; do not auto-open browser");
   io.log("  --components <cli|ide|action|all>");
   io.log("Update options:");
@@ -1484,7 +1485,7 @@ function printHelp(io: CliIO): void {
   io.log("  auth logout [--token-env GITHUB_TOKEN]");
   io.log("  auth ... --project|--agentrule");
   io.log("Example one-line project install:");
-  io.log("  repodigest init --project --yes --repo owner/repo");
+  io.log("  repodigest init --project --yes --repo owner/repo --token-source browser --client-id <id>");
 }
 
 export async function runCli(

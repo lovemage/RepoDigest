@@ -54,35 +54,21 @@ One command for init + browser auth + config validation:
 node packages/cli/dist/index.js init --quick --project --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
 ```
 
-## GitHub Token: How To Obtain And Verify
+## GitHub Authentication (Browser-Only)
 
-### Option A (Recommended): Browser OAuth login from CLI
+RepoDigest now uses browser OAuth device flow as the only supported authentication path.
 
-Use OAuth Device Flow:
+Login from CLI:
 ```bash
 node packages/cli/dist/index.js auth login --client-id <GITHUB_OAUTH_CLIENT_ID>
 ```
 
-Or do it directly during init:
+Or do it directly during init (recommended):
 ```bash
 node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
 ```
 
-### Option B: Personal Access Token (PAT)
-
-1. Go to GitHub settings and create a token with repo read permission.
-2. Put token in `.env`:
-```dotenv
-GITHUB_TOKEN=ghp_xxx_or_github_pat_xxx
-```
-3. Ensure `.repodigest.yml` uses the same key:
-```yaml
-providers:
-  github:
-    tokenEnv: GITHUB_TOKEN
-```
-
-### Verify Token Is Actually Working
+### Verify Authentication Is Working
 
 Run:
 ```bash
@@ -109,7 +95,7 @@ node packages/cli/dist/index.js init
 
 Non-interactive project install:
 ```bash
-node packages/cli/dist/index.js init --project --yes --repo owner/repo
+node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
 ```
 
 Generate digest:

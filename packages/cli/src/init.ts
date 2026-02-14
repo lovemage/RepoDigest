@@ -1,11 +1,11 @@
-import { checkbox, input, password, select } from "@inquirer/prompts";
+import { checkbox, input, select } from "@inquirer/prompts";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createDefaultConfig, serializeConfig } from "./config.js";
 
 export type Component = "cli" | "ide" | "action";
-export type TokenSource = "env" | "input" | "browser";
+export type TokenSource = "browser";
 export type OutputLanguage = "zh-TW" | "en" | "both";
 export type InstallTarget = "project" | "agentrule";
 
@@ -24,7 +24,6 @@ export interface PromptAdapter {
   checkbox: (options: { message: string; choices: CheckboxOption[] }) => Promise<string[]>;
   select: (options: { message: string; choices: SelectOption[] }) => Promise<string>;
   input: (options: { message: string; default?: string }) => Promise<string>;
-  password: (options: { message: string; mask?: string }) => Promise<string>;
 }
 
 interface InitDefaults {
@@ -45,7 +44,6 @@ export interface InitPresetOptions {
   outputLanguage?: OutputLanguage;
   timezone?: string;
   tokenSource?: TokenSource;
-  token?: string;
   components?: Component[];
   agentruleHome?: string;
 }
@@ -67,7 +65,6 @@ interface InitPlan {
   repos: string[];
   outputLanguage: OutputLanguage;
   timezone: string;
-  token?: string;
 }
 
 const actionWorkflowTemplate = `name: RepoDigest Daily
@@ -91,8 +88,7 @@ function defaultPrompts(): PromptAdapter {
   return {
     checkbox: (options) => checkbox(options),
     select: (options) => select(options),
-    input: (options) => input(options),
-    password: (options) => password(options)
+    input: (options) => input(options)
   };
 }
 
@@ -217,35 +213,6 @@ async function mergeVsCodeTasks(projectRoot: string): Promise<string> {
   return tasksPath;
 }
 
-async function upsertEnvVar(root: string, key: string, value: string): Promise<string> {
-  const envPath = path.join(root, ".env");
-  let lines: string[] = [];
-
-  try {
-    const raw = await readFile(envPath, "utf-8");
-    lines = raw.split(/\r?\n/);
-  } catch {
-    lines = [];
-  }
-
-  const nextLine = `${key}=${value}`;
-  let replaced = false;
-  const updated = lines.map((line) => {
-    if (line.startsWith(`${key}=`)) {
-      replaced = true;
-      return nextLine;
-    }
-    return line;
-  });
-
-  if (!replaced) {
-    updated.push(nextLine);
-  }
-
-  await writeFile(envPath, `${updated.filter(Boolean).join("\n")}\n`, "utf-8");
-  return envPath;
-}
-
 async function fileExists(filePath: string): Promise<boolean> {
   try {
     await readFile(filePath, "utf-8");
@@ -295,11 +262,6 @@ async function applyInitPlan(plan: InitPlan): Promise<InitWizardResult> {
   const outputDir = path.join(plan.installRoot, "repodigest");
   await mkdir(outputDir, { recursive: true });
   createdFiles.push(outputDir);
-
-  if (plan.tokenSource === "input" && plan.token && plan.token.length > 0) {
-    const envPath = await upsertEnvVar(plan.installRoot, "GITHUB_TOKEN", plan.token);
-    createdFiles.push(envPath);
-  }
 
   if (plan.installTarget === "project") {
     if (plan.components.has("ide")) {
@@ -354,14 +316,7 @@ export async function runInitWizard(options: InitWizardOptions): Promise<InitWiz
         )
       : new Set<Component>(["cli"]);
 
-  const tokenSource = (await promptImpl.select({
-    message: "GitHub token source",
-    choices: [
-      { name: "Environment variable (GITHUB_TOKEN)", value: "env" },
-      { name: "Enter token now (.env)", value: "input" },
-      { name: "Browser login (GitHub OAuth device flow)", value: "browser" }
-    ]
-  })) as TokenSource;
+  const tokenSource: TokenSource = "browser";
 
   const repos = await promptRepos(promptImpl);
   if (repos.length === 0) {
@@ -384,16 +339,6 @@ export async function runInitWizard(options: InitWizardOptions): Promise<InitWiz
     })
   ).trim();
 
-  let token: string | undefined;
-  if (tokenSource === "input") {
-    token = (
-      await promptImpl.password({
-        message: "GitHub token",
-        mask: "*"
-      })
-    ).trim();
-  }
-
   return applyInitPlan({
     cwd: options.cwd,
     installTarget: target,
@@ -402,20 +347,19 @@ export async function runInitWizard(options: InitWizardOptions): Promise<InitWiz
     tokenSource,
     repos,
     outputLanguage,
-    timezone,
-    ...(token ? { token } : {})
+    timezone
   });
 }
 
 export async function runInitPreset(options: InitPresetOptions): Promise<InitWizardResult> {
   const installRoot = resolveInstallRoot(options.cwd, options.target, options.agentruleHome);
   const components = new Set<Component>(options.components ?? ["cli"]);
-  const tokenSource = options.tokenSource ?? "env";
+  const tokenSource = options.tokenSource ?? "browser";
   const outputLanguage = options.outputLanguage ?? "en";
   const timezone = options.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
 
-  if (tokenSource === "input" && !options.token) {
-    throw new Error("Missing token for token-source=input in non-interactive mode.");
+  if (tokenSource !== "browser") {
+    throw new Error("Only token-source=browser is supported.");
   }
 
   if (options.repos.length === 0) {
@@ -430,7 +374,6 @@ export async function runInitPreset(options: InitPresetOptions): Promise<InitWiz
     tokenSource,
     repos: options.repos,
     outputLanguage,
-    timezone,
-    ...(options.token ? { token: options.token } : {})
+    timezone
   });
 }

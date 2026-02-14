@@ -50,11 +50,11 @@ function createMockIO() {
 function createPromptAdapter(values: {
   installTarget?: "project" | "agentrule";
   components: string[];
-  tokenSource: "env" | "input" | "browser";
   repos: string[];
   lang: "zh-TW" | "en" | "both";
   timezone: string;
-  token?: string;
+  clientId?: string;
+  authorizeNow?: "yes" | "no";
 }): PromptAdapter {
   let inputCount = 0;
   return {
@@ -64,8 +64,8 @@ function createPromptAdapter(values: {
       if (message.includes("Install target")) {
         return values.installTarget ?? "project";
       }
-      if (message.includes("token")) {
-        return values.tokenSource;
+      if (message.includes("Authorize now")) {
+        return values.authorizeNow ?? "yes";
       }
       return values.lang;
     },
@@ -76,9 +76,12 @@ function createPromptAdapter(values: {
         inputCount += 1;
         return next;
       }
+      if (message.includes("OAuth client id")) {
+        return values.clientId ?? "";
+      }
       return values.timezone;
     },
-    password: async () => values.token ?? ""
+    password: async () => ""
   };
 }
 
@@ -104,19 +107,36 @@ describe("runCli", () => {
   it("runs init wizard and generates selected files", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
     tempDirs.push(dir);
+    const mockAuthClient: GithubDeviceAuthClientLike = {
+      requestDeviceCode: async () => ({
+        deviceCode: "device-code",
+        userCode: "ABCD-EFGH",
+        verificationUri: "https://github.com/login/device",
+        expiresIn: 120,
+        interval: 0
+      }),
+      pollAccessToken: async () => ({
+        status: "token",
+        accessToken: "gho_test_token"
+      })
+    };
 
     const prompts = createPromptAdapter({
       installTarget: "project",
       components: ["all"],
-      tokenSource: "input",
       repos: ["owner/repo-a", "owner/repo-b"],
       lang: "zh-TW",
       timezone: "Asia/Taipei",
-      token: "ghp_test_token"
+      clientId: "Iv1.test",
+      authorizeNow: "yes"
     });
 
     const { io } = createMockIO();
-    const code = await runCli(["init"], dir, { io, prompts });
+    const code = await runCli(["init"], dir, {
+      io,
+      prompts,
+      createGithubDeviceAuthClient: () => mockAuthClient
+    });
     expect(code).toBe(0);
 
     const config = await readFile(path.join(dir, ".repodigest.yml"), "utf-8");
@@ -127,7 +147,7 @@ describe("runCli", () => {
     expect(config).toMatch("timezone: Asia/Taipei");
     expect(config).toMatch("- owner/repo-a");
     expect(config).toMatch("- owner/repo-b");
-    expect(env).toMatch("GITHUB_TOKEN=ghp_test_token");
+    expect(env).toMatch("GITHUB_TOKEN=gho_test_token");
     expect(tasks).toMatch("RepoDigest: Today");
     expect(workflow).toMatch("RepoDigest Daily");
   });
@@ -175,12 +195,38 @@ describe("runCli", () => {
   it("supports one-line project init in non-interactive mode", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
     tempDirs.push(dir);
+    const mockAuthClient: GithubDeviceAuthClientLike = {
+      requestDeviceCode: async () => ({
+        deviceCode: "device-code",
+        userCode: "ABCD-EFGH",
+        verificationUri: "https://github.com/login/device",
+        expiresIn: 120,
+        interval: 0
+      }),
+      pollAccessToken: async () => ({
+        status: "token",
+        accessToken: "gho_project_token"
+      })
+    };
 
     const { io } = createMockIO();
     const code = await runCli(
-      ["init", "--project", "--yes", "--repo", "owner/repo-a", "--repo", "owner/repo-b"],
+      [
+        "init",
+        "--project",
+        "--yes",
+        "--repo",
+        "owner/repo-a",
+        "--repo",
+        "owner/repo-b",
+        "--token-source",
+        "browser",
+        "--client-id",
+        "Iv1.test",
+        "--no-browser"
+      ],
       dir,
-      { io }
+      { io, createGithubDeviceAuthClient: () => mockAuthClient }
     );
 
     expect(code).toBe(0);
@@ -194,12 +240,36 @@ describe("runCli", () => {
     tempDirs.push(dir);
     const globalHome = path.join(dir, "global-home");
     process.env.AGENTRULE_HOME = globalHome;
+    const mockAuthClient: GithubDeviceAuthClientLike = {
+      requestDeviceCode: async () => ({
+        deviceCode: "device-code",
+        userCode: "ABCD-EFGH",
+        verificationUri: "https://github.com/login/device",
+        expiresIn: 120,
+        interval: 0
+      }),
+      pollAccessToken: async () => ({
+        status: "token",
+        accessToken: "gho_global_token"
+      })
+    };
 
     const { io } = createMockIO();
     const code = await runCli(
-      ["init", "--agentrule", "--yes", "--repo", "owner/repo-global"],
+      [
+        "init",
+        "--agentrule",
+        "--yes",
+        "--repo",
+        "owner/repo-global",
+        "--token-source",
+        "browser",
+        "--client-id",
+        "Iv1.test",
+        "--no-browser"
+      ],
       dir,
-      { io }
+      { io, createGithubDeviceAuthClient: () => mockAuthClient }
     );
 
     expect(code).toBe(0);
@@ -303,7 +373,6 @@ describe("runCli", () => {
     const prompts = createPromptAdapter({
       installTarget: "project",
       components: ["cli"],
-      tokenSource: "env",
       repos: [],
       lang: "zh-TW",
       timezone: "Asia/Taipei"
@@ -315,18 +384,57 @@ describe("runCli", () => {
     expect(errors.join("\n")).toMatch("At least one repository is required");
   });
 
+  it("rejects non-browser token source in init", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
+    tempDirs.push(dir);
+    const { io, errors } = createMockIO();
+    const code = await runCli(
+      ["init", "--project", "--yes", "--repo", "owner/repo", "--token-source", "env"],
+      dir,
+      { io }
+    );
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toMatch("Invalid --token-source value");
+  });
+
   it("delivers first digest from clean setup in one flow", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
     tempDirs.push(dir);
-    process.env.GITHUB_TOKEN = "ghp_token";
+    const mockAuthClient: GithubDeviceAuthClientLike = {
+      requestDeviceCode: async () => ({
+        deviceCode: "device-code",
+        userCode: "ABCD-EFGH",
+        verificationUri: "https://github.com/login/device",
+        expiresIn: 120,
+        interval: 0
+      }),
+      pollAccessToken: async () => ({
+        status: "token",
+        accessToken: "gho_onboarding_token"
+      })
+    };
 
     const start = Date.now();
     const { io, logs } = createMockIO();
 
     const initCode = await runCli(
-      ["init", "--project", "--yes", "--repo", "owner/repo"],
+      [
+        "init",
+        "--project",
+        "--yes",
+        "--repo",
+        "owner/repo",
+        "--token-source",
+        "browser",
+        "--client-id",
+        "Iv1.test",
+        "--no-browser"
+      ],
       dir,
-      { io }
+      {
+        io,
+        createGithubDeviceAuthClient: () => mockAuthClient
+      }
     );
     expect(initCode).toBe(0);
 

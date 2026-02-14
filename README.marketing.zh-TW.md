@@ -33,7 +33,7 @@ npm run build
 ### 2) 一行初始化（專案內）
 
 ```bash
-node packages/cli/dist/index.js init --project --yes --repo owner/repo
+node packages/cli/dist/index.js init --project --yes --repo owner/repo --token-source browser --client-id <GITHUB_OAUTH_CLIENT_ID>
 ```
 
 如果你不想手動貼 Token，可以在安裝流程直接授權：
