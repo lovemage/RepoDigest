@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { checkbox as promptCheckbox, select as promptSelect } from "@inquirer/prompts";
-import { access, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runPipeline, type Event, type WorkItem } from "@repodigest/core";
@@ -64,6 +64,7 @@ interface InitArgs {
   target?: InstallTarget;
   yes: boolean;
   quick: boolean;
+  reinstall: boolean;
   repos: string[];
   language?: OutputLanguage;
   timezone?: string;
@@ -233,6 +234,7 @@ function parseInitArgs(args: string[]): InitArgs {
   const result: InitArgs = {
     yes: false,
     quick: false,
+    reinstall: false,
     repos: [],
     noBrowser: false
   };
@@ -250,6 +252,11 @@ function parseInitArgs(args: string[]): InitArgs {
 
     if (arg === "--quick") {
       result.quick = true;
+      continue;
+    }
+
+    if (arg === "--reinstall") {
+      result.reinstall = true;
       continue;
     }
 
@@ -1183,6 +1190,7 @@ async function runInit(
 
     const completeBrowserAuth = async (installRoot: string): Promise<number> => {
       const clientId = resolveClientId();
+      await mkdir(installRoot, { recursive: true });
 
       const tokenEnv = await resolveTokenEnvKey(installRoot);
       if (!parsed.yes && !parsed.quick) {
@@ -1219,15 +1227,69 @@ async function runInit(
       return 0;
     };
 
+    const ensureTargetIsReady = async (target: InstallTarget): Promise<boolean> => {
+      const installRoot = resolveInstallRoot(cwd, target);
+      const configPath = path.join(installRoot, ".repodigest.yml");
+      if (!(await pathExists(configPath))) {
+        return true;
+      }
+
+      if (!parsed.reinstall) {
+        const canPrompt = Boolean(runtimeOptions.prompts) || Boolean(process.stdin.isTTY);
+        if (!canPrompt) {
+          throw new Error("RepoDigest is already installed. Re-run with --reinstall to replace the install.");
+        }
+
+        const askSelect =
+          runtimeOptions.prompts?.select ??
+          ((options: { message: string; choices: Array<{ name: string; value: string }> }) =>
+            promptSelect(options));
+        const decision = await askSelect({
+          message: "Existing RepoDigest installation detected. Reinstall now?",
+          choices: [
+            { name: "Reinstall (remove generated files and continue)", value: "reinstall" },
+            { name: "Cancel", value: "cancel" }
+          ]
+        });
+        if (decision !== "reinstall") {
+          io.log("Initialization cancelled.");
+          return false;
+        }
+        parsed.reinstall = true;
+      }
+
+      const removeArgs = ["--yes", ...(target === "agentrule" ? ["--agentrule"] : ["--project"])];
+      const removeCode = await runRemove(cwd, io, removeArgs);
+      if (removeCode !== 0) {
+        return false;
+      }
+      io.log("Previous installation removed. Continuing with reinstall...");
+      return true;
+    };
+
     if (parsed.quick) {
       const target = parsed.target ?? "project";
       const tokenSource = parsed.tokenSource ?? "browser";
+
+      if (tokenSource === "browser") {
+        const installRoot = resolveInstallRoot(cwd, target);
+        const authCode = await completeBrowserAuth(installRoot);
+        if (authCode !== 0) {
+          return authCode;
+        }
+      }
+
+      const ready = await ensureTargetIsReady(target);
+      if (!ready) {
+        return 1;
+      }
 
       const result = await runInitPreset({
         cwd,
         target,
         repos: parsed.repos,
         tokenSource,
+        reinstall: parsed.reinstall,
         ...(parsed.language ? { outputLanguage: parsed.language } : {}),
         ...(parsed.timezone ? { timezone: parsed.timezone } : {}),
         ...(parsed.components ? { components: parsed.components } : {})
@@ -1237,13 +1299,6 @@ async function runInit(
       io.log(`Install root: ${result.installRoot}`);
       for (const file of result.createdFiles) {
         io.log(`Created ${file}`);
-      }
-
-      if (result.tokenSource === "browser") {
-        const authCode = await completeBrowserAuth(result.installRoot);
-        if (authCode !== 0) {
-          return authCode;
-        }
       }
       const repoCode = await completeRepoSelection(result.installRoot);
       if (repoCode !== 0) {
@@ -1259,10 +1314,26 @@ async function runInit(
 
     if (parsed.yes) {
       const target = parsed.target ?? "project";
+      const tokenSource = parsed.tokenSource ?? "browser";
+
+      if (tokenSource === "browser") {
+        const installRoot = resolveInstallRoot(cwd, target);
+        const authCode = await completeBrowserAuth(installRoot);
+        if (authCode !== 0) {
+          return authCode;
+        }
+      }
+
+      const ready = await ensureTargetIsReady(target);
+      if (!ready) {
+        return 1;
+      }
+
       const result = await runInitPreset({
         cwd,
         target,
         repos: parsed.repos,
+        reinstall: parsed.reinstall,
         ...(parsed.language ? { outputLanguage: parsed.language } : {}),
         ...(parsed.timezone ? { timezone: parsed.timezone } : {}),
         ...(parsed.tokenSource ? { tokenSource: parsed.tokenSource } : {}),
@@ -1273,13 +1344,6 @@ async function runInit(
       io.log(`Install root: ${result.installRoot}`);
       for (const file of result.createdFiles) {
         io.log(`Created ${file}`);
-      }
-
-      if (result.tokenSource === "browser") {
-        const authCode = await completeBrowserAuth(result.installRoot);
-        if (authCode !== 0) {
-          return authCode;
-        }
       }
       return completeRepoSelection(result.installRoot);
     }
@@ -1534,6 +1598,7 @@ function printHelp(io: CliIO): void {
   io.log("  --agentrule         install to global agentrule location");
   io.log("  --yes               non-interactive mode");
   io.log("  --quick             one-command setup (init + browser auth + validate)");
+  io.log("  --reinstall         reinstall if existing config is found");
   io.log("  --repo <owner/repo> repeatable (optional; can select after auth)");
   io.log("  --lang <en|zh-TW|both>");
   io.log("  --timezone <IANA timezone>");

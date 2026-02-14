@@ -22,6 +22,13 @@ node packages/cli/dist/index.js init --quick --project
 3. 在 CLI 直接勾選你要追蹤的 repo（可不先輸入 repo 名稱）
 4. 幫你檢查設定可用
 
+如果偵測到你之前裝過，CLI 會直接問你要不要「重新安裝並清掉舊的產出檔」。
+非互動環境可用：
+
+```bash
+node packages/cli/dist/index.js init --quick --project --reinstall
+```
+
 ## 每天使用
 
 ```bash
@@ -47,3 +54,5 @@ node packages/cli/dist/index.js update --add-repo owner/new-repo
 # 移除安裝檔
 node packages/cli/dist/index.js remove --yes
 ```
+
+授權時，CLI 會先顯示要輸入到瀏覽器的驗證碼，按 Enter 才會開瀏覽器。

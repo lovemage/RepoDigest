@@ -28,6 +28,13 @@ node packages/cli/dist/index.js init --quick --project
 node packages/cli/dist/index.js init --quick --project --repo owner/repo
 ```
 
+若偵測到已安裝，CLI 會讓你互動式選擇是否重新安裝。
+在非互動環境可改用：
+
+```bash
+node packages/cli/dist/index.js init --quick --project --reinstall
+```
+
 ## 驗證與產出
 
 ```bash
@@ -48,3 +55,5 @@ node packages/cli/dist/index.js update --add-repo owner/new-repo
 node packages/cli/dist/index.js remove --yes
 node packages/cli/dist/index.js auth login
 ```
+
+CLI 會先顯示瀏覽器要輸入的驗證碼，再等待你按 Enter 後開啟瀏覽器。

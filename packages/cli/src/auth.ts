@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { createInterface } from "node:readline/promises";
 
 export interface AuthLogger {
   log: (message: string) => void;
@@ -206,6 +207,25 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitForEnterToOpenBrowser(logger: AuthLogger): Promise<void> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY || process.env.VITEST) {
+    return;
+  }
+
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    await rl.question("Press Enter to open browser for GitHub authorization...");
+  } catch {
+    logger.log("Skipping browser open confirmation prompt.");
+  } finally {
+    rl.close();
+  }
+}
+
 function runCommand(command: string, args: string[]): Promise<CommandResult> {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
@@ -351,7 +371,11 @@ export async function runAuthLogin(
   });
 
   const openUrl = payload.verificationUriComplete ?? payload.verificationUri;
+  logger.log(`GitHub device code: ${payload.userCode}`);
+  logger.log(`Verification URL: ${openUrl}`);
+
   if (!noBrowser) {
+    await waitForEnterToOpenBrowser(logger);
     const opened = openBrowser(openUrl);
     if (opened) {
       logger.log(`Opened browser for GitHub login: ${openUrl}`);
@@ -362,7 +386,6 @@ export async function runAuthLogin(
     logger.log(`Open this URL in your browser: ${openUrl}`);
   }
 
-  logger.log(`GitHub device code: ${payload.userCode}`);
   logger.log("Waiting for GitHub authorization...");
 
   const deadline = Date.now() + payload.expiresIn * 1000;

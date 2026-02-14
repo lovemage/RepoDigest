@@ -56,6 +56,7 @@ function createPromptAdapter(values: {
   timezone: string;
   clientId?: string;
   authorizeNow?: "yes" | "no";
+  reinstallDecision?: "reinstall" | "cancel";
 }): PromptAdapter {
   let inputCount = 0;
   return {
@@ -73,6 +74,9 @@ function createPromptAdapter(values: {
       }
       if (message.includes("Authorize now")) {
         return values.authorizeNow ?? "yes";
+      }
+      if (message.includes("Existing RepoDigest installation") || message.includes("Existing RepoDigest install")) {
+        return values.reinstallDecision ?? "reinstall";
       }
       return values.lang;
     },
@@ -378,6 +382,73 @@ describe("runCli", () => {
     expect(code).toBe(0);
     expect(logs.join("\n")).toMatch("Config is valid.");
     expect(logs.join("\n")).toMatch("Quick setup complete.");
+  });
+
+  it("allows reinstall from init quick flow when existing install is detected", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
+    tempDirs.push(dir);
+    const { writeFile, mkdir } = await import("node:fs/promises");
+
+    await writeFile(path.join(dir, ".repodigest.yml"), "timezone: UTC\nscope:\n  repos:\n    - old/repo\n", "utf-8");
+    await mkdir(path.join(dir, "repodigest"), { recursive: true });
+    await writeFile(path.join(dir, "repodigest", "latest.md"), "# old\n", "utf-8");
+
+    const mockAuthClient: GithubDeviceAuthClientLike = {
+      requestDeviceCode: async () => ({
+        deviceCode: "device-code",
+        userCode: "ABCD-EFGH",
+        verificationUri: "https://github.com/login/device",
+        expiresIn: 120,
+        interval: 0
+      }),
+      pollAccessToken: async () => ({
+        status: "token",
+        accessToken: "gho_reinstall_token"
+      })
+    };
+
+    const prompts = createPromptAdapter({
+      components: ["cli"],
+      repos: [],
+      repoSelection: ["owner/repo-fresh"],
+      lang: "en",
+      timezone: "UTC",
+      reinstallDecision: "reinstall"
+    });
+
+    const { io } = createMockIO();
+    const code = await runCli(
+      ["init", "--quick", "--project", "--client-id", "Iv1.test", "--no-browser"],
+      dir,
+      {
+        io,
+        prompts,
+        listGithubRepos: async () => ["owner/repo-fresh"],
+        createGithubDeviceAuthClient: () => mockAuthClient
+      }
+    );
+
+    expect(code).toBe(0);
+    const config = await readFile(path.join(dir, ".repodigest.yml"), "utf-8");
+    expect(config).toMatch("- owner/repo-fresh");
+  });
+
+  it("does not remove existing install when browser auth prerequisites are missing", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
+    tempDirs.push(dir);
+    const { writeFile, mkdir } = await import("node:fs/promises");
+
+    await writeFile(path.join(dir, ".repodigest.yml"), "timezone: UTC\nscope:\n  repos:\n    - keep/repo\n", "utf-8");
+    await mkdir(path.join(dir, "repodigest"), { recursive: true });
+    await writeFile(path.join(dir, "repodigest", "latest.md"), "# keep\n", "utf-8");
+
+    const { io, errors } = createMockIO();
+    const code = await runCli(["init", "--quick", "--project", "--reinstall"], dir, { io });
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toMatch("Missing GitHub OAuth client id");
+
+    const config = await readFile(path.join(dir, ".repodigest.yml"), "utf-8");
+    expect(config).toMatch("- keep/repo");
   });
 
   it("allows interactive init to select repos after browser auth", async () => {

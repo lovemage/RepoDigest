@@ -113,6 +113,7 @@ npx repodigest init --agentrule --yes --repo owner/repo
 - `--agentrule`: install to global agentrule location.
 - `--yes`: non-interactive mode.
 - `--quick`: run init + optional browser auth + validate in one command.
+- `--reinstall`: if already installed, remove managed files and reinstall.
 - `--repo <owner/repo>`: repeatable, optional. If omitted, CLI prompts repo selection after browser auth.
 - `--lang <en|zh-TW|both>`
 - `--timezone <IANA timezone>`
@@ -120,6 +121,8 @@ npx repodigest init --agentrule --yes --repo owner/repo
 - `--client-id <id>`: optional GitHub OAuth client id (needed only when GitHub CLI `gh` is unavailable).
 - `--scope <value>`: OAuth scopes for browser auth (default `repo`).
 - `--no-browser`: do not auto-open browser; print URL/code only.
+
+If existing install is detected and you did not pass `--reinstall`, CLI asks whether to reinstall.
 - `--components <cli|ide|action|all>`: only for project target.
 
 Global install root:
@@ -226,6 +229,8 @@ Options:
 - `--scope <value>`: OAuth scope list, default `repo`.
 - `--token-env <key>`: env key to write/remove in `.env`.
 - `--no-browser`: do not auto-open browser; print URL/code only.
+
+During `auth login`, CLI prints the device code first, then waits for Enter before opening browser.
 
 ## Date value shortcuts
 Accepted shortcuts in `--since` / `--until`:

@@ -39,6 +39,12 @@ Optional (skip selection prompt):
 node packages/cli/dist/index.js init --quick --project --repo owner/repo
 ```
 
+If an existing install is detected, CLI will let you choose reinstall interactively.
+For non-interactive environments, use:
+```bash
+node packages/cli/dist/index.js init --quick --project --reinstall
+```
+
 ## No Manual Token Copy
 
 Browser auth only.
@@ -46,6 +52,8 @@ Browser auth only.
 ```bash
 node packages/cli/dist/index.js auth login
 ```
+
+CLI shows the device code first, then waits for `Enter` before opening your browser.
 
 If `gh` is not available on your machine, use OAuth app fallback:
 

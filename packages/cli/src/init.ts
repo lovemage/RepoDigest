@@ -1,5 +1,5 @@
 import { checkbox, input, select } from "@inquirer/prompts";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createDefaultConfig, serializeConfig } from "./config.js";
@@ -45,6 +45,7 @@ export interface InitPresetOptions {
   timezone?: string;
   tokenSource?: TokenSource;
   components?: Component[];
+  reinstall?: boolean;
   agentruleHome?: string;
 }
 
@@ -222,6 +223,14 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
+async function removeExistingInstall(installRoot: string, installTarget: InstallTarget): Promise<void> {
+  await rm(path.join(installRoot, ".repodigest.yml"), { force: true });
+  await rm(path.join(installRoot, "repodigest"), { recursive: true, force: true });
+  if (installTarget === "project") {
+    await rm(path.join(installRoot, ".github", "workflows", "repodigest.yml"), { force: true });
+  }
+}
+
 function validatePlan(plan: InitPlan): void {
   if (plan.components.size === 0) {
     throw new Error("No components selected.");
@@ -301,6 +310,21 @@ export async function runInitWizard(options: InitWizardOptions): Promise<InitWiz
   const target = installTarget || defaultTarget;
   const installRoot = resolveInstallRoot(options.cwd, target, options.agentruleHome);
 
+  const configPath = path.join(installRoot, ".repodigest.yml");
+  if (await fileExists(configPath)) {
+    const action = await promptImpl.select({
+      message: "Existing RepoDigest install detected. What do you want to do?",
+      choices: [
+        { name: "Reinstall (remove generated files and continue)", value: "reinstall" },
+        { name: "Cancel", value: "cancel" }
+      ]
+    });
+    if (action !== "reinstall") {
+      throw new Error("Initialization cancelled.");
+    }
+    await removeExistingInstall(installRoot, target);
+  }
+
   const components =
     target === "project"
       ? normalizeComponents(
@@ -357,6 +381,14 @@ export async function runInitPreset(options: InitPresetOptions): Promise<InitWiz
 
   if (tokenSource !== "browser") {
     throw new Error("Only token-source=browser is supported.");
+  }
+
+  const configPath = path.join(installRoot, ".repodigest.yml");
+  if ((await fileExists(configPath)) && !options.reinstall) {
+    throw new Error("RepoDigest is already installed. Re-run with --reinstall to replace the install.");
+  }
+  if (options.reinstall) {
+    await removeExistingInstall(installRoot, options.target);
   }
 
   return applyInitPlan({
