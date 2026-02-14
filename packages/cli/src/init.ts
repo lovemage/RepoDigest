@@ -319,9 +319,6 @@ export async function runInitWizard(options: InitWizardOptions): Promise<InitWiz
   const tokenSource: TokenSource = "browser";
 
   const repos = await promptRepos(promptImpl);
-  if (repos.length === 0) {
-    throw new Error("At least one repository is required. Use owner/name.");
-  }
   const outputLanguage = (await promptImpl.select({
     message: "Output language",
     choices: [
@@ -360,10 +357,6 @@ export async function runInitPreset(options: InitPresetOptions): Promise<InitWiz
 
   if (tokenSource !== "browser") {
     throw new Error("Only token-source=browser is supported.");
-  }
-
-  if (options.repos.length === 0) {
-    throw new Error("At least one --repo owner/name is required in non-interactive mode.");
   }
 
   return applyInitPlan({

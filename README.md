@@ -25,13 +25,19 @@ It can render:
 ```bash
 npm install
 npm run build
-node packages/cli/dist/index.js init --quick --project --repo owner/repo
+node packages/cli/dist/index.js init --quick --project
 ```
 
 That one `init --quick` command does:
 1. create config
 2. run browser auth (via GitHub CLI `gh` if available)
-3. validate setup
+3. let you pick repos from CLI (if `--repo` is not provided)
+4. validate setup
+
+Optional (skip selection prompt):
+```bash
+node packages/cli/dist/index.js init --quick --project --repo owner/repo
+```
 
 ## No Manual Token Copy
 

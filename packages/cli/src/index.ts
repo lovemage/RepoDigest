@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { select as promptSelect } from "@inquirer/prompts";
+import { checkbox as promptCheckbox, select as promptSelect } from "@inquirer/prompts";
 import { access, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,6 +42,7 @@ export interface CliRuntimeOptions {
   io?: CliIO;
   createGithubProvider?: (token: string) => GithubProviderLike;
   createGithubDeviceAuthClient?: () => GithubDeviceAuthClientLike;
+  listGithubRepos?: (token: string) => Promise<string[]>;
 }
 
 interface ParsedCommand {
@@ -803,6 +804,110 @@ async function loadToken(cwd: string, tokenKey: string): Promise<string | undefi
   return process.env[tokenKey] ?? envFile[tokenKey];
 }
 
+interface GithubRepoListItem {
+  full_name?: string;
+  private?: boolean;
+}
+
+async function fetchGithubRepos(token: string): Promise<string[]> {
+  const repos: string[] = [];
+  let page = 1;
+
+  while (page <= 3) {
+    const response = await fetch(
+      `https://api.github.com/user/repos?per_page=100&page=${page}&sort=updated&affiliation=owner,collaborator,organization_member`,
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "User-Agent": "repodigest/0.1.0"
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Unable to fetch repositories from GitHub (HTTP ${response.status}).`);
+    }
+
+    const data = (await response.json()) as GithubRepoListItem[];
+    if (!Array.isArray(data) || data.length === 0) {
+      break;
+    }
+
+    for (const repo of data) {
+      if (repo && typeof repo.full_name === "string" && repo.full_name.includes("/")) {
+        repos.push(repo.full_name);
+      }
+    }
+
+    if (data.length < 100) {
+      break;
+    }
+    page += 1;
+  }
+
+  return Array.from(new Set(repos));
+}
+
+async function ensureReposConfigured(
+  installRoot: string,
+  io: CliIO,
+  runtimeOptions: CliRuntimeOptions
+): Promise<number> {
+  const config = await loadConfig(installRoot);
+  if (config.scope.repos.length > 0) {
+    return 0;
+  }
+
+  const tokenKey = config.providers.github.tokenEnv;
+  const token = await loadToken(installRoot, tokenKey);
+  if (!token) {
+    throw new Error(`Repository selection requires ${tokenKey}. Run auth login first.`);
+  }
+
+  const repoList =
+    runtimeOptions.listGithubRepos ? await runtimeOptions.listGithubRepos(token) : await fetchGithubRepos(token);
+
+  if (repoList.length === 0) {
+    throw new Error("No accessible GitHub repositories found. Use `update --add-repo owner/name`.");
+  }
+
+  if (!runtimeOptions.prompts && !process.stdin.isTTY) {
+    throw new Error("No interactive terminal for repository selection. Pass --repo owner/name.");
+  }
+
+  const askCheckbox =
+    runtimeOptions.prompts?.checkbox ??
+    ((options: { message: string; choices: Array<{ name: string; value: string; checked?: boolean }> }) =>
+      promptCheckbox(options));
+
+  const selected = await askCheckbox({
+    message: "Select repositories to track",
+    choices: repoList.slice(0, 50).map((repo, index) => ({
+      name: repo,
+      value: repo,
+      checked: index < 3
+    }))
+  });
+
+  if (!selected || selected.length === 0) {
+    throw new Error("At least one repository must be selected.");
+  }
+
+  const nextConfig: RepoDigestConfig = {
+    ...config,
+    scope: {
+      ...config.scope,
+      repos: selected
+    }
+  };
+
+  const configPath = path.join(installRoot, ".repodigest.yml");
+  await writeFile(configPath, serializeConfig(nextConfig), "utf-8");
+  io.log(`Updated ${configPath} with ${selected.length} selected repos.`);
+  return 0;
+}
+
 async function runDigestPipeline(
   cwd: string,
   config: RepoDigestConfig,
@@ -1109,12 +1214,14 @@ async function runInit(
       });
     };
 
+    const completeRepoSelection = async (installRoot: string): Promise<number> => {
+      await ensureReposConfigured(installRoot, io, runtimeOptions);
+      return 0;
+    };
+
     if (parsed.quick) {
       const target = parsed.target ?? "project";
       const tokenSource = parsed.tokenSource ?? "browser";
-      if (parsed.repos.length === 0) {
-        throw new Error("Missing required option: --repo owner/repo (repeatable) for --quick mode.");
-      }
 
       const result = await runInitPreset({
         cwd,
@@ -1137,6 +1244,10 @@ async function runInit(
         if (authCode !== 0) {
           return authCode;
         }
+      }
+      const repoCode = await completeRepoSelection(result.installRoot);
+      if (repoCode !== 0) {
+        return repoCode;
       }
 
       const validateCode = await runValidate(result.installRoot, io);
@@ -1165,9 +1276,12 @@ async function runInit(
       }
 
       if (result.tokenSource === "browser") {
-        return completeBrowserAuth(result.installRoot);
+        const authCode = await completeBrowserAuth(result.installRoot);
+        if (authCode !== 0) {
+          return authCode;
+        }
       }
-      return 0;
+      return completeRepoSelection(result.installRoot);
     }
 
     const initOptions: {
@@ -1190,9 +1304,12 @@ async function runInit(
     }
 
     if (result.tokenSource === "browser") {
-      return completeBrowserAuth(result.installRoot);
+      const authCode = await completeBrowserAuth(result.installRoot);
+      if (authCode !== 0) {
+        return authCode;
+      }
     }
-    return 0;
+    return completeRepoSelection(result.installRoot);
   } catch (error: unknown) {
     io.error("Initialization failed.");
     io.error(formatConfigError(error));
@@ -1417,7 +1534,7 @@ function printHelp(io: CliIO): void {
   io.log("  --agentrule         install to global agentrule location");
   io.log("  --yes               non-interactive mode");
   io.log("  --quick             one-command setup (init + browser auth + validate)");
-  io.log("  --repo <owner/repo> repeatable");
+  io.log("  --repo <owner/repo> repeatable (optional; can select after auth)");
   io.log("  --lang <en|zh-TW|both>");
   io.log("  --timezone <IANA timezone>");
   io.log("  --token-source <browser>  browser auth only");
@@ -1444,7 +1561,7 @@ function printHelp(io: CliIO): void {
   io.log("  auth logout [--token-env GITHUB_TOKEN]");
   io.log("  auth ... --project|--agentrule");
   io.log("Example one-line project install:");
-  io.log("  repodigest init --quick --project --repo owner/repo");
+  io.log("  repodigest init --quick --project");
 }
 
 export async function runCli(

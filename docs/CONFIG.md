@@ -93,13 +93,13 @@ npx repodigest init
 One-line project install:
 
 ```bash
-npx repodigest init --project --yes --repo owner/repo
+npx repodigest init --project --yes
 ```
 
 One-command quick setup:
 
 ```bash
-npx repodigest init --quick --project --repo owner/repo
+npx repodigest init --quick --project
 ```
 
 One-line global install to `agentrule`:
@@ -113,7 +113,7 @@ npx repodigest init --agentrule --yes --repo owner/repo
 - `--agentrule`: install to global agentrule location.
 - `--yes`: non-interactive mode.
 - `--quick`: run init + optional browser auth + validate in one command.
-- `--repo <owner/repo>`: repeatable, required in non-interactive mode.
+- `--repo <owner/repo>`: repeatable, optional. If omitted, CLI prompts repo selection after browser auth.
 - `--lang <en|zh-TW|both>`
 - `--timezone <IANA timezone>`
 - `--token-source <browser>`: browser auth only.

@@ -51,6 +51,7 @@ function createPromptAdapter(values: {
   installTarget?: "project" | "agentrule";
   components: string[];
   repos: string[];
+  repoSelection?: string[];
   lang: "zh-TW" | "en" | "both";
   timezone: string;
   clientId?: string;
@@ -58,7 +59,13 @@ function createPromptAdapter(values: {
 }): PromptAdapter {
   let inputCount = 0;
   return {
-    checkbox: async () => values.components,
+    checkbox: async (options) => {
+      const message = typeof options.message === "string" ? options.message : "";
+      if (message.includes("Select repositories to track")) {
+        return values.repoSelection ?? [];
+      }
+      return values.components;
+    },
     select: async (options) => {
       const message = typeof options.message === "string" ? options.message : "";
       if (message.includes("Install target")) {
@@ -80,8 +87,7 @@ function createPromptAdapter(values: {
         return values.clientId ?? "";
       }
       return values.timezone;
-    },
-    password: async () => ""
+    }
   };
 }
 
@@ -322,7 +328,7 @@ describe("runCli", () => {
     expect(env).toMatch("GITHUB_TOKEN=gho_browser_token");
   });
 
-  it("supports quick setup flow in one command", async () => {
+  it("supports quick setup flow in one command without --repo", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
     tempDirs.push(dir);
 
@@ -340,14 +346,20 @@ describe("runCli", () => {
       })
     };
 
+    const prompts = createPromptAdapter({
+      components: ["cli"],
+      repos: [],
+      repoSelection: ["owner/repo-quick"],
+      lang: "en",
+      timezone: "UTC"
+    });
+
     const { io, logs } = createMockIO();
     const code = await runCli(
       [
         "init",
         "--quick",
         "--project",
-        "--repo",
-        "owner/repo-quick",
         "--token-source",
         "browser",
         "--client-id",
@@ -357,6 +369,8 @@ describe("runCli", () => {
       dir,
       {
         io,
+        prompts,
+        listGithubRepos: async () => ["owner/repo-quick", "owner/repo-other"],
         createGithubDeviceAuthClient: () => mockAuthClient
       }
     );
@@ -366,22 +380,44 @@ describe("runCli", () => {
     expect(logs.join("\n")).toMatch("Quick setup complete.");
   });
 
-  it("fails interactive init when no repo is provided", async () => {
+  it("allows interactive init to select repos after browser auth", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "repodigest-cli-"));
     tempDirs.push(dir);
+
+    const mockAuthClient: GithubDeviceAuthClientLike = {
+      requestDeviceCode: async () => ({
+        deviceCode: "device-code",
+        userCode: "ABCD-EFGH",
+        verificationUri: "https://github.com/login/device",
+        expiresIn: 120,
+        interval: 0
+      }),
+      pollAccessToken: async () => ({
+        status: "token",
+        accessToken: "gho_repo_select_token"
+      })
+    };
 
     const prompts = createPromptAdapter({
       installTarget: "project",
       components: ["cli"],
       repos: [],
+      repoSelection: ["owner/repo-picked"],
       lang: "zh-TW",
-      timezone: "Asia/Taipei"
+      timezone: "Asia/Taipei",
+      authorizeNow: "yes"
     });
 
-    const { io, errors } = createMockIO();
-    const code = await runCli(["init"], dir, { io, prompts });
-    expect(code).toBe(1);
-    expect(errors.join("\n")).toMatch("At least one repository is required");
+    const { io } = createMockIO();
+    const code = await runCli(["init", "--client-id", "Iv1.test", "--no-browser"], dir, {
+      io,
+      prompts,
+      listGithubRepos: async () => ["owner/repo-picked", "owner/repo-other"],
+      createGithubDeviceAuthClient: () => mockAuthClient
+    });
+    expect(code).toBe(0);
+    const config = await readFile(path.join(dir, ".repodigest.yml"), "utf-8");
+    expect(config).toMatch("- owner/repo-picked");
   });
 
   it("rejects non-browser token source in init", async () => {
